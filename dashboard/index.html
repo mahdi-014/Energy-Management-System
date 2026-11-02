@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC Office EMS - Room 1 Monitor</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-brand">
+            <h1>DCEMS</h1>
+            <span class="sub-brand">DC Office Room-Level Hybrid Energy Management System</span>
+        </div>
+        <div class="header-status">
+            <span id="controller-mode-badge" class="badge badge-info">Mode: AUTO</span>
+            <span id="connection-status-badge" class="badge badge-danger">Offline</span>
+            <span id="last-sync-text" class="timestamp-text">Last Sync: Never</span>
+        </div>
+    </header>
+
+    <nav class="app-nav">
+        <a href="#live" class="nav-link active">Live Telemetry</a>
+        <a href="#control" class="nav-link disabled" title="Available in Phase 4">Control</a>
+        <a href="#events" class="nav-link disabled" title="Available in Phase 2">Events & History</a>
+        <a href="#analysis" class="nav-link disabled" title="Available in Phase 5">Analysis</a>
+        <a href="#settings" class="nav-link disabled" title="Available in Phase 3">Settings</a>
+    </nav>
+
+    <main class="container">
+        <!-- Prominent Offline & Staleness Alert Banner -->
+        <div id="status-banner" class="alert-banner banner-warning" style="display: none;">
+            <span class="banner-icon">⚠️</span>
+            <span id="status-banner-text" class="banner-message">Warning: Telemetry is stale or controller is disconnected.</span>
+        </div>
+
+        <section class="section-block">
+            <div class="section-header">
+                <h2>Environmental Sensors</h2>
+                <span class="footnote-note">Snapshot updated every 30s</span>
+            </div>
+            <div class="card-grid">
+                <!-- Temperature Card -->
+                <div class="card">
+                    <div class="card-title">Temperature</div>
+                    <div class="card-value" id="val-temp">--.- <span class="unit">°C</span></div>
+                    <div class="card-footer" id="val-temp-status">Sensor: Waiting...</div>
+                </div>
+
+                <!-- Humidity Card -->
+                <div class="card">
+                    <div class="card-title">Relative Humidity</div>
+                    <div class="card-value" id="val-hum">-- <span class="unit">%</span></div>
+                    <div class="card-footer" id="val-hum-status">Sensor: Waiting...</div>
+                </div>
+
+                <!-- Ambient Light Card -->
+                <div class="card">
+                    <div class="card-title">Ambient Light (LDR)</div>
+                    <div class="card-value" id="val-light">-- <span class="unit">%</span></div>
+                    <div class="card-footer" id="val-ldr-raw">Raw ADC: ---- / 1023</div>
+                </div>
+
+                <!-- Occupancy & Motion Card -->
+                <div class="card">
+                    <div class="card-title">Occupancy Inference</div>
+                    <div class="card-value occupancy-badge" id="val-occupancy">Unknown</div>
+                    <div class="card-footer">
+                        <span id="val-last-motion">Last motion: Never</span>
+                        <div class="disclaimer-note">Note: PIR detects motion, not people.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section-block">
+            <div class="section-header">
+                <h2>Appliance Commanded States</h2>
+                <span class="footnote-note">Estimates based on commanded relay state</span>
+            </div>
+            <div class="card-grid">
+                <!-- Light 01 -->
+                <div class="card appliance-card">
+                    <div class="card-header-flex">
+                        <div class="appliance-id">light_01</div>
+                        <span class="badge badge-success">Auto-Eligible</span>
+                    </div>
+                    <div class="appliance-state" id="state-light">OFF</div>
+                    <div class="card-footer">
+                        <span class="estimate-label">Estimate based on commanded state</span>
+                    </div>
+                </div>
+
+                <!-- Fan 01 -->
+                <div class="card appliance-card">
+                    <div class="card-header-flex">
+                        <div class="appliance-id">fan_01</div>
+                        <span class="badge badge-success">Auto-Eligible</span>
+                    </div>
+                    <div class="appliance-state" id="state-fan">OFF</div>
+                    <div class="card-footer">
+                        <span class="estimate-label">Estimate based on commanded state</span>
+                    </div>
+                </div>
+
+                <!-- AC 01 -->
+                <div class="card appliance-card safety-locked">
+                    <div class="card-header-flex">
+                        <div class="appliance-id">ac_01</div>
+                        <span class="badge badge-danger">Alert-Only Lock</span>
+                    </div>
+                    <div class="appliance-state" id="state-ac">OFF</div>
+                    <div class="card-footer">
+                        <span class="estimate-label">Compressor safety: Auto-switch prohibited</span>
+                    </div>
+                </div>
+
+                <!-- PC 01 -->
+                <div class="card appliance-card safety-locked">
+                    <div class="card-header-flex">
+                        <div class="appliance-id">pc_01</div>
+                        <span class="badge badge-danger">Alert-Only Lock</span>
+                    </div>
+                    <div class="appliance-state" id="state-pc">OFF</div>
+                    <div class="card-footer">
+                        <span class="estimate-label">Data safety: Power cutoff prohibited</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>DCEMS Local Office Controller &copy; 2026. Self-hosted on private LAN. No cloud dependencies.</p>
+        <p class="disclaimer-text">PIR absence does not prove room vacancy. All operational figures are estimates based on commanded state.</p>
+    </footer>
+
+    <script src="/js/live.js"></script>
+</body>
+</html>

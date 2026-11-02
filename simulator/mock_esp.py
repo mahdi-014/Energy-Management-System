@@ -1,7 +1,7 @@
 import json
 import time
 import uuid
-import threading
+import random
 from typing import Dict, Any, Optional
 
 try:
@@ -11,9 +11,9 @@ except ImportError:
 
 class MockESP8266:
     """
-    Host-side ESP8266 Simulator.
+    Host-side ESP8266 Simulator (Phase 1).
     Emulates sensor telemetry, retain state, Last Will and Testament,
-    and the 8-point authoritative safety gate on dcems/room1/#.
+    and offline queueing on dcems/room1/#.
     """
     def __init__(
         self,
@@ -44,10 +44,6 @@ class MockESP8266:
             "pc_01": False   # Compile-time safety lock
         }
         
-        # Ring buffer of recent action IDs (size 16) for deduplication
-        self.recent_action_ids = []
-        self.max_action_ids = 16
-        
         # Bounded RAM event buffer for offline resilience (max 50 events)
         self.event_queue = []
         self.max_queue_size = 50
@@ -56,13 +52,12 @@ class MockESP8266:
         self.gap_start_ts = None
 
         self.last_motion_time = int(time.time())
-        self.last_manual_command_time = {}
         self.last_switch_time = {d: int(time.time()) for d in self.device_states}
         
         self.client = None
         self.is_connected = False
         self._running = False
-        self._thread = None
+        self.message_seq = 0
 
     def start(self):
         if mqtt is None:
@@ -108,7 +103,8 @@ class MockESP8266:
                 "status": "online",
                 "ts": int(time.time()),
                 "firmware_version": "1.0.0-mock",
-                "uptime_sec": 1
+                "uptime_sec": 1,
+                "room_id": self.room_id
             })
             self.client.publish(f"dcems/{self.room_id}/status", online_payload, qos=1, retain=True)
 
@@ -127,7 +123,6 @@ class MockESP8266:
         self.is_connected = False
 
     def _on_message(self, client, userdata, msg):
-        # Stub for cmd handling (fully fleshed out in Phase 4)
         pass
 
     def publish_state(self):
@@ -141,33 +136,62 @@ class MockESP8266:
         })
         self.client.publish(f"dcems/{self.room_id}/state", payload, qos=1, retain=True)
 
-    def publish_sensor_snapshot(self, pir: int = 0, ldr: int = 500, temp: float = 27.0, hum: float = 60.0):
+    def publish_sensor_snapshot(
+        self,
+        pir: Optional[int] = 0,
+        ldr: Optional[int] = 520,
+        temp: Optional[float] = 27.5,
+        hum: Optional[float] = 62.0,
+        quality: Optional[str] = None
+    ) -> Dict[str, Any]:
         now = int(time.time())
+        self.message_seq += 1
+
         if pir == 1:
             self.last_motion_time = now
 
+        # Compute light percentage from raw ADC if valid
+        light_pct = None
+        if ldr is not None and 0 <= ldr <= 1023:
+            light_pct = round((ldr / 1023.0) * 100)
+
+        # Validity check
+        is_valid = True
+        if ldr is None or not (0 <= ldr <= 1023):
+            is_valid = False
+        if temp is None or not (0.0 <= temp <= 50.0):
+            is_valid = False
+        if hum is None or not (20.0 <= hum <= 90.0):
+            is_valid = False
+
+        computed_quality = quality or ("ok" if is_valid else "degraded")
+
         payload = {
-            "event_id": str(uuid.uuid4()),
+            "event_id": f"evt_{now}_{self.message_seq}",
             "ts": now,
             "room_id": self.room_id,
             "pir": pir,
             "ldr": ldr,
+            "light_pct": light_pct,
             "temp": temp,
             "hum": hum,
             "last_motion_at": self.last_motion_time,
-            "valid": True,
-            "quality": "ok"
+            "valid": is_valid,
+            "quality": computed_quality
         }
-        topic = f"dcems/{self.room_id}/sensors"
         
-        if self.is_connected:
-            self.client.publish(topic, json.dumps(payload), qos=0)
+        topic = f"dcems/{self.room_id}/sensors"
+        payload_bytes = json.dumps(payload).encode("utf-8")
+
+        if self.is_connected and self.client:
+            self.client.publish(topic, payload_bytes, qos=0)
         else:
             self._enqueue_event("sensor", payload)
 
+        return payload
+
     def _enqueue_event(self, event_type: str, data: Dict[str, Any]):
         if len(self.event_queue) >= self.max_queue_size:
-            # Drop oldest and flag data gap
             if not self.data_gap_occurred:
                 self.data_gap_occurred = True
                 self.gap_start_ts = int(time.time())
@@ -193,4 +217,3 @@ class MockESP8266:
             self.data_gap_occurred = False
             self.gap_dropped_count = 0
             self.gap_start_ts = None
-
