@@ -1,5 +1,6 @@
 import time
 import json
+import uuid
 import sqlite3
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
@@ -16,6 +17,7 @@ from app.auth import authenticate_user, create_access_token, get_current_user, s
 from app.mqtt_client import start_mqtt_client, stop_mqtt_client, get_system_status
 from app.analysis import get_daily_runtime_breakdown
 from app.detectors import run_all_detectors, get_config_value, set_config_value
+from app.policy import issue_device_command, issue_mode_command
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,6 +65,19 @@ class DaylightCalibrationRequest(BaseModel):
     daylight_on_threshold: Optional[int] = 350
     daylight_off_threshold: Optional[int] = 450
     set_calibrated: bool = True
+
+class DeviceControlRequest(BaseModel):
+    device_id: str
+    requested_state: str  # ON or OFF
+    reason: Optional[str] = "operator_toggle"
+
+class ModeControlRequest(BaseModel):
+    mode: str  # AUTO or MANUAL
+
+class OverrideRequest(BaseModel):
+    device_id: str
+    hold_seconds: Optional[int] = 600
+    reason: Optional[str] = "manual_hold"
 
 @app.get("/api/health")
 def health_check() -> Dict[str, Any]:
@@ -391,6 +406,102 @@ def get_calibration_status() -> Dict[str, Any]:
             "latest_ldr_raw": latest_ldr,
             "status_text": "Calibrated & Active" if calib_flag else "Uncalibrated - Daylight detector locked for safety"
         }
+    finally:
+        conn.close()
+
+@app.post("/api/control/device")
+def control_device(
+    req: DeviceControlRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Issues an authenticated manual device toggle.
+    Test T13: AC and PC power-off is BLOCKED by default.
+    """
+    actor = user.get("username", "authenticated_operator")
+    res = issue_device_command(
+        device_id=req.device_id,
+        requested_state=req.requested_state,
+        source="manual",
+        reason=req.reason or "operator_toggle",
+        actor=actor
+    )
+    if not res.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Command blocked by policy: {res.get('reason')}"
+        )
+    return res
+
+@app.post("/api/control/mode")
+def control_mode(
+    req: ModeControlRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Changes controller mode between AUTO and MANUAL with audit trail.
+    """
+    actor = user.get("username", "authenticated_operator")
+    res = issue_mode_command(new_mode=req.mode, source="manual", actor=actor)
+    if not res.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Mode change rejected: {res.get('reason')}"
+        )
+    return res
+
+@app.post("/api/control/override")
+def set_manual_override(
+    req: OverrideRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Sets a temporary manual override lock on a device.
+    """
+    conn = get_db_connection()
+    now = int(time.time())
+    expiry = now + (req.hold_seconds or 600)
+    override_id = f"ovr_{uuid.uuid4().hex[:8]}"
+    actor = user.get("username", "operator")
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO manual_overrides (override_id, device_id, start_time_utc, expiry_time_utc, reason, created_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (override_id, req.device_id, now, expiry, req.reason or "manual_hold", actor))
+        conn.commit()
+        return {
+            "override_id": override_id,
+            "device_id": req.device_id,
+            "start_time_utc": now,
+            "expiry_time_utc": expiry,
+            "hold_seconds": req.hold_seconds
+        }
+    finally:
+        conn.close()
+
+@app.get("/api/control/actions")
+def get_control_actions(
+    device_id: Optional[str] = None,
+    limit: int = 50
+) -> List[Dict[str, Any]]:
+    """
+    Returns audit history of control commands and acknowledgment outcomes.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = "SELECT * FROM control_actions WHERE 1=1"
+        params: List[Any] = []
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+        query += " ORDER BY timestamp_utc DESC LIMIT ?"
+        params.append(limit)
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

@@ -95,3 +95,4 @@ def test_tc04_t4_t5_daylight_gating_confirmation_and_hysteresis():
         assert cur.fetchone()["status"] == "resolved"
     finally:
         conn.close()
+

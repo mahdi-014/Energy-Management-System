@@ -93,3 +93,4 @@ def evaluate_runtime_anomalies(
     finally:
         if should_close:
             conn.close()
+

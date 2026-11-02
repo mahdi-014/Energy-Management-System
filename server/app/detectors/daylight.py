@@ -107,3 +107,4 @@ def evaluate_daylight_anomaly(
     finally:
         if should_close:
             conn.close()
+

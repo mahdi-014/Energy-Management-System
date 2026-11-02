@@ -30,3 +30,4 @@ uint32_t getLastManualCmdEpoch();
 bool isDeviceON(const char* deviceId);
 
 #endif // STATE_H
+

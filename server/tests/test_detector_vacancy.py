@@ -103,3 +103,4 @@ def test_tc11_ac_pc_vacancy_alert_only():
             assert r["status"] == "open"
     finally:
         conn.close()
+

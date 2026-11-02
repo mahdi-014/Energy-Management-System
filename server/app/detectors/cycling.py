@@ -77,3 +77,4 @@ def evaluate_cycling_anomalies(
     finally:
         if should_close:
             conn.close()
+

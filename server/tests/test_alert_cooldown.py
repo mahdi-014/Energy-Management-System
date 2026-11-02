@@ -62,3 +62,4 @@ def test_alert_deduplication_and_cooldown():
         assert resolved_row["resolved_at"] == t0 + 400
     finally:
         conn.close()
+

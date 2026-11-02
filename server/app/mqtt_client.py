@@ -14,6 +14,7 @@ from app.config import settings
 from app.db import get_db_connection
 from app.analysis import process_device_state_event, handle_outage_or_data_gap
 from app.detectors import run_all_detectors
+from app.policy import process_command_ack
 
 logger = logging.getLogger("dcems.mqtt")
 
@@ -229,6 +230,7 @@ def _on_connect(client, userdata, flags, rc):
         client.subscribe(f"dcems/{room}/status", qos=1)
         client.subscribe(f"dcems/{room}/state", qos=1)
         client.subscribe(f"dcems/{room}/events", qos=1)
+        client.subscribe(f"dcems/{room}/ack", qos=1)
     else:
         logger.error(f"Failed to connect to MQTT broker, return code {rc}")
 
@@ -243,6 +245,8 @@ def _on_message(client, userdata, msg):
         process_state_message(msg.payload)
     elif topic == f"dcems/{room}/events":
         process_event_message(msg.payload)
+    elif topic == f"dcems/{room}/ack":
+        process_command_ack(msg.payload)
 
 def start_mqtt_client() -> Optional[Any]:
     global _mqtt_client_instance

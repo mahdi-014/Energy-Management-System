@@ -63,3 +63,4 @@ def test_tc05_runtime_threshold_detection():
         assert cur.fetchone()["status"] == "resolved"
     finally:
         conn.close()
+

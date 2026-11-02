@@ -110,3 +110,4 @@ def evaluate_vacancy_anomalies(
                 })
 
     return anomalies_detected
+

@@ -116,3 +116,4 @@ def evaluate_sensor_quality_anomaly(
     finally:
         if should_close:
             conn.close()
+

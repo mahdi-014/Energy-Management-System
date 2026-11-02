@@ -56,3 +56,4 @@ def test_tc06_rapid_cycling_diagnostic_detection():
         assert "5 switches" in row["observed_value"]
     finally:
         conn.close()
+

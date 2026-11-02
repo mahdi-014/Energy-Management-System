@@ -23,8 +23,8 @@
         <a href="#live" id="nav-live" class="nav-link active">Live Telemetry</a>
         <a href="#events" id="nav-events" class="nav-link">Events & History</a>
         <a href="#anomalies" id="nav-anomalies" class="nav-link">Anomalies & Alerts</a>
+        <a href="#control" id="nav-control" class="nav-link">Control</a>
         <a href="#settings" id="nav-settings" class="nav-link">Settings & Calibration</a>
-        <a href="#control" class="nav-link disabled" title="Available in Phase 4">Control</a>
         <a href="#analysis" class="nav-link disabled" title="Available in Phase 5">Analysis</a>
     </nav>
 
@@ -297,7 +297,150 @@
             </section>
         </div>
 
-        <!-- TAB 4: SETTINGS & CALIBRATION -->
+        <!-- TAB 4: MANUAL & POLICY-GATED CONTROL -->
+        <div id="tab-control" class="tab-pane" style="display: none;">
+            <div id="cmd-status-banner" class="alert-banner banner-info" style="display: none; margin-bottom: 1.5rem;">
+                <span class="banner-icon" id="cmd-banner-icon">ℹ️</span>
+                <span class="banner-message" id="cmd-banner-text">Command executing...</span>
+            </div>
+
+            <!-- Controller Mode Section -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Controller Operating Mode</h2>
+                    <span class="footnote-note">ESP8266 owns safety gate validation</span>
+                </div>
+                <div class="card" style="max-width: 600px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <div class="card-title">System Mode</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Current: <span id="ctrl-mode-indicator" class="badge badge-info">AUTO</span>
+                            </div>
+                        </div>
+                        <button id="btn-toggle-mode" class="btn-refresh" style="background-color: var(--color-accent); color: #000;">
+                            Switch Mode
+                        </button>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);">
+                        In <strong>MANUAL</strong> mode, all automatic rule-based actions are halted. Manual toggles still pass through the 8-point hardware safety gate.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Manual Actuation Controls -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Appliance Actuation Switches</h2>
+                    <span class="footnote-note">Requires authentication; AC/PC power-off blocked by default (T13)</span>
+                </div>
+                <div class="card-grid">
+                    <!-- Light 01 Control -->
+                    <div class="card appliance-card">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">light_01</div>
+                            <span class="badge badge-success">Auto-Eligible</span>
+                        </div>
+                        <div class="appliance-state" id="ctrl-state-light">OFF</div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button class="btn-refresh btn-device-cmd" data-device="light_01" data-state="ON" style="flex:1; background-color: var(--color-success); color: #fff;">
+                                Turn ON
+                            </button>
+                            <button class="btn-refresh btn-device-cmd" data-device="light_01" data-state="OFF" style="flex:1; background-color: var(--color-danger); color: #fff;">
+                                Turn OFF
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Fan 01 Control -->
+                    <div class="card appliance-card">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">fan_01</div>
+                            <span class="badge badge-success">Auto-Eligible</span>
+                        </div>
+                        <div class="appliance-state" id="ctrl-state-fan">OFF</div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button class="btn-refresh btn-device-cmd" data-device="fan_01" data-state="ON" style="flex:1; background-color: var(--color-success); color: #fff;">
+                                Turn ON
+                            </button>
+                            <button class="btn-refresh btn-device-cmd" data-device="fan_01" data-state="OFF" style="flex:1; background-color: var(--color-danger); color: #fff;">
+                                Turn OFF
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AC 01 Control (Locked Power-Off) -->
+                    <div class="card appliance-card safety-locked">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">ac_01</div>
+                            <span class="badge badge-danger">Alert-Only (T13)</span>
+                        </div>
+                        <div class="appliance-state" id="ctrl-state-ac">OFF</div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button class="btn-refresh btn-device-cmd" data-device="ac_01" data-state="ON" style="flex:1; background-color: var(--color-success); color: #fff;">
+                                Turn ON
+                            </button>
+                            <button class="btn-refresh btn-device-cmd" data-device="ac_01" data-state="OFF" style="flex:1; background-color: #475569; color: #94a3b8; cursor: not-allowed;" title="Power-OFF Blocked per Test T13">
+                                OFF Blocked
+                            </button>
+                        </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--color-danger); font-style: italic;">
+                            Compressor safety: Power cutoff prohibited by policy.
+                        </div>
+                    </div>
+
+                    <!-- PC 01 Control (Locked Power-Off) -->
+                    <div class="card appliance-card safety-locked">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">pc_01</div>
+                            <span class="badge badge-danger">Alert-Only (T13)</span>
+                        </div>
+                        <div class="appliance-state" id="ctrl-state-pc">OFF</div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button class="btn-refresh btn-device-cmd" data-device="pc_01" data-state="ON" style="flex:1; background-color: var(--color-success); color: #fff;">
+                                Turn ON
+                            </button>
+                            <button class="btn-refresh btn-device-cmd" data-device="pc_01" data-state="OFF" style="flex:1; background-color: #475569; color: #94a3b8; cursor: not-allowed;" title="Power-OFF Blocked per Test T13">
+                                OFF Blocked
+                            </button>
+                        </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--color-danger); font-style: italic;">
+                            Data integrity: Hard cutoff prohibited by policy.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control Actions Audit Trail -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Control Actions & ACK Audit Log</h2>
+                    <span class="footnote-note">Every command requires firmware ACK to confirm</span>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="actions-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Action ID</th>
+                                <th>Device</th>
+                                <th>Proposed State</th>
+                                <th>Policy Decision</th>
+                                <th>Decision Reason</th>
+                                <th>Outcome (ACK)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actions-tbody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">No control actions recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB 5: SETTINGS & CALIBRATION -->
         <div id="tab-settings" class="tab-pane" style="display: none;">
             <section class="section-block">
                 <div class="section-header">
@@ -364,5 +507,6 @@
     <script src="/js/live.js"></script>
     <script src="/js/events.js"></script>
     <script src="/js/anomalies.js"></script>
+    <script src="/js/control.js"></script>
 </body>
 </html>

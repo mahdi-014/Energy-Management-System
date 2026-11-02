@@ -53,6 +53,10 @@ class MockESP8266:
         self.last_motion_time = int(time.time())
         self.last_switch_time = {d: int(time.time()) for d in self.device_states}
         self.last_manual_command_time = 0
+        self.manual_hold_sec = 600
+        self.min_on_time = {"light_01": 60, "fan_01": 120, "ac_01": 300, "pc_01": 0}
+        self.min_off_time = {"light_01": 60, "fan_01": 60, "ac_01": 300, "pc_01": 0}
+        self.processed_action_ids = []
         
         self.client = None
         self.is_connected = False
@@ -117,7 +121,115 @@ class MockESP8266:
         self.is_connected = False
 
     def _on_message(self, client, userdata, msg):
-        pass
+        try:
+            data = json.loads(msg.payload.decode("utf-8"))
+            self.handle_command_payload(data)
+        except Exception:
+            pass
+
+    def handle_command_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        now = int(time.time())
+        action_id = data.get("action_id", "")
+        cmd_type = data.get("command_type")
+
+        # 1. Mode switch command
+        if cmd_type == "set_mode" or "mode" in data:
+            new_mode = data.get("mode")
+            if new_mode in ("AUTO", "MANUAL"):
+                self.mode = new_mode
+                self.publish_state()
+                ack = {"action_id": action_id, "result": "accepted", "ts": now}
+            else:
+                ack = {"action_id": action_id, "result": "blocked", "reason": "invalid_mode", "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # 2. Device control command
+        device_id = data.get("device_id")
+        requested_state = data.get("requested_state")
+        source = data.get("source", "manual")
+        expires_at = data.get("expires_at", 0)
+
+        # Check duplicate
+        if action_id and action_id in self.processed_action_ids:
+            ack = {"action_id": action_id, "result": "duplicate", "reason": "duplicate_action_id", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # Check expiry
+        if expires_at and now > expires_at:
+            ack = {"action_id": action_id, "result": "expired", "reason": "command_expired", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # Check device exists
+        if device_id not in self.device_states:
+            ack = {"action_id": action_id, "result": "blocked", "reason": "unknown_device", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # Redundant transition check
+        if self.device_states[device_id] == requested_state:
+            ack = {"action_id": action_id, "result": "blocked", "reason": "redundant_transition", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # Test T13: AC/PC power-off blocked by default
+        if device_id in ("ac_01", "pc_01") and requested_state == "OFF":
+            ack = {"action_id": action_id, "result": "blocked", "reason": "ac_pc_power_off_blocked_by_policy", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # If source is automated (server_proposal / local_rule)
+        if source != "manual":
+            # Rule 1: autoEligible
+            if not self.auto_eligible.get(device_id, False):
+                ack = {"action_id": action_id, "result": "blocked", "reason": "device_not_auto_eligible", "device_id": device_id, "ts": now}
+                self._publish_ack(ack)
+                return ack
+
+            # Rule 2: mode == AUTO
+            if self.mode != "AUTO":
+                ack = {"action_id": action_id, "result": "blocked", "reason": "controller_in_manual_mode", "device_id": device_id, "ts": now}
+                self._publish_ack(ack)
+                return ack
+
+            # Rule 3: manual hold
+            if self.last_manual_command_time > 0 and (now - self.last_manual_command_time) < self.manual_hold_sec:
+                ack = {"action_id": action_id, "result": "blocked", "reason": "manual_override_active", "device_id": device_id, "ts": now}
+                self._publish_ack(ack)
+                return ack
+
+        # Min interval checks
+        elapsed = now - self.last_switch_time.get(device_id, 0)
+        if requested_state == "OFF" and elapsed < self.min_on_time.get(device_id, 60):
+            ack = {"action_id": action_id, "result": "blocked", "reason": "min_on_time_violated", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+        if requested_state == "ON" and elapsed < self.min_off_time.get(device_id, 60):
+            ack = {"action_id": action_id, "result": "blocked", "reason": "min_off_time_violated", "device_id": device_id, "ts": now}
+            self._publish_ack(ack)
+            return ack
+
+        # All checks passed: execute state change
+        self.set_device_state(device_id, requested_state, source=source, reason=data.get("reason", "command_execution"), ts=now)
+
+        if action_id:
+            self.processed_action_ids.append(action_id)
+            if len(self.processed_action_ids) > 32:
+                self.processed_action_ids.pop(0)
+
+        ack = {"action_id": action_id, "result": "accepted", "device_id": device_id, "state": requested_state, "ts": now}
+        self._publish_ack(ack)
+        return ack
+
+    def _publish_ack(self, ack_dict: Dict[str, Any]):
+        topic = f"dcems/{self.room_id}/ack"
+        payload_bytes = json.dumps(ack_dict).encode("utf-8")
+        if self.is_connected and self.client:
+            self.client.publish(topic, payload_bytes, qos=1)
+        else:
+            self._enqueue_event(topic, ack_dict, retained=False)
 
     def publish_state(self):
         payload = {

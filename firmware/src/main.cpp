@@ -6,6 +6,8 @@
 #include "sensors.h"
 #include "mqtt_comm.h"
 #include "state.h"
+#include "safety_gate.h"
+#include "rules.h"
 
 // 16x2 I2C Character LCD (PCF8574 address 0x27)
 static LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -25,6 +27,8 @@ void setup() {
 
     // Initialize state tracking and set all relays de-energized
     initState();
+    initActionIdBuffer();
+    initRules();
 
     // Initialize I2C LCD
     Wire.begin(PIN_LCD_SDA, PIN_LCD_SCL);
@@ -102,11 +106,14 @@ void loop() {
     // 2. Sample sensors non-blockingly
     updateSensors(nowEpoch);
 
-    // 3. Periodic telemetry publish every 30 seconds
+    // 3. Evaluate local autonomous rules (safety-gated)
+    SensorSnapshot currentSnap = getLatestSnapshot();
+    evaluateLocalRules(&currentSnap, nowEpoch);
+
+    // 4. Periodic telemetry publish every 30 seconds
     if (nowMs - prevTelemetryMillis >= INTERVAL_TELEMETRY_MS || prevTelemetryMillis == 0) {
         prevTelemetryMillis = nowMs;
-        SensorSnapshot snap = getLatestSnapshot();
-        publishSensorTelemetry(snap);
+        publishSensorTelemetry(currentSnap);
         Serial.print(F("[TELEMETRY] Sent snapshot. LDR: "));
         Serial.print(snap.ldrRaw);
         Serial.print(F(" Temp: "));

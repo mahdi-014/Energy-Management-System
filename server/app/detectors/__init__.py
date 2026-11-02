@@ -95,3 +95,4 @@ def run_all_detectors(
     finally:
         if should_close:
             conn.close()
+

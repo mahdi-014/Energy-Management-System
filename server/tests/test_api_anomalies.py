@@ -130,3 +130,4 @@ def test_api_daylight_calibration_workflow():
         assert "calibrate_daylight" in entry["details"]
     finally:
         conn.close()
+

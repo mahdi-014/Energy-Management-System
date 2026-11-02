@@ -3,6 +3,9 @@
 #include "mqtt_comm.h"
 #include "config.h"
 #include "state.h"
+#include "safety_gate.h"
+#include "rules.h"
+#include "sensors.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -98,6 +101,94 @@ static void flushEventQueue() {
         droppedEventsCount = 0;
         gapStartTs = 0;
     }
+}
+
+static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
+    if (strcmp(topic, "dcems/" ROOM_IDENTIFIER "/cmd") != 0) return;
+
+    StaticJsonDocument<512> doc;
+    DeserializationError err = deserializeJson(doc, payload, length);
+    if (err) return;
+
+    uint32_t now = getCurrentEpochUtc();
+    const char* actionId = doc["action_id"] | "";
+    const char* cmdType = doc["command_type"] | "";
+    const char* source = doc["source"] | "manual";
+
+    // 1. Controller Mode Change
+    if (strcmp(cmdType, "set_mode") == 0 || doc.containsKey("mode")) {
+        const char* mode = doc["mode"] | "";
+        if (strcmp(mode, "AUTO") == 0 || strcmp(mode, "MANUAL") == 0) {
+            setControllerMode(mode);
+            publishDeviceStateSnapshot(mode, now);
+            StaticJsonDocument<256> ackDoc;
+            ackDoc["action_id"] = actionId;
+            ackDoc["result"] = "accepted";
+            ackDoc["ts"] = now;
+            char ackBuf[256];
+            serializeJson(ackDoc, ackBuf);
+            mqttClient.publish("dcems/" ROOM_IDENTIFIER "/ack", ackBuf, false);
+        } else {
+            StaticJsonDocument<256> ackDoc;
+            ackDoc["action_id"] = actionId;
+            ackDoc["result"] = "blocked";
+            ackDoc["reason"] = "invalid_mode";
+            ackDoc["ts"] = now;
+            char ackBuf[256];
+            serializeJson(ackDoc, ackBuf);
+            mqttClient.publish("dcems/" ROOM_IDENTIFIER "/ack", ackBuf, false);
+        }
+        return;
+    }
+
+    // 2. Device Control Command
+    const char* deviceId = doc["device_id"] | "";
+    const char* requestedState = doc["requested_state"] | "";
+    uint32_t expiresAt = doc["expires_at"] | 0;
+
+    SensorSnapshot snap = getLatestSnapshot();
+    SafetyGateContext ctx;
+    ctx.controllerMode = getControllerMode();
+    ctx.currentEpoch = now;
+    ctx.timeSynced = isTimeSynced();
+    ctx.lastManualCmdEpoch = getLastManualCmdEpoch();
+    ctx.manualHoldSec = MANUAL_HOLD_SEC;
+    ctx.sensorDataValid = snap.valid;
+    ctx.sensorSnapshotEpoch = snap.timestampUtc;
+    ctx.sensorStaleThresholdSec = SENSOR_STALE_SEC;
+    ctx.actionId = actionId;
+    ctx.expiresAt = expiresAt;
+    ctx.isDuplicate = isDuplicateActionId(actionId);
+    ctx.isServerProposal = (strcmp(source, "server_proposal") == 0);
+
+    SafetyGateResult gateRes;
+    if (ctx.isServerProposal) {
+        gateRes = validateAutoAction(deviceId, requestedState, &ctx);
+    } else {
+        gateRes = validateManualCommand(deviceId, requestedState, &ctx);
+    }
+
+    StaticJsonDocument<256> ackDoc;
+    ackDoc["action_id"] = actionId;
+    ackDoc["device_id"] = deviceId;
+    ackDoc["ts"] = now;
+
+    if (gateRes.allowed) {
+        const char* reason = doc["reason"] | "cmd";
+        setDeviceState(deviceId, requestedState, source, reason, now);
+        recordActionId(actionId);
+        ackDoc["result"] = "accepted";
+        ackDoc["state"] = requestedState;
+    } else {
+        ackDoc["result"] = (strcmp(gateRes.reasonCode, "command_expired") == 0) ? "expired" :
+                           (strcmp(gateRes.reasonCode, "duplicate_action_id") == 0) ? "duplicate" : "blocked";
+        ackDoc["reason"] = gateRes.reasonCode;
+    }
+
+    char ackBuf[256];
+    serializeJson(ackDoc, ackBuf);
+    mqttClient.publish("dcems/" ROOM_IDENTIFIER "/ack", ackBuf, false);
+}
 #endif
 }
 
@@ -109,6 +200,7 @@ void initMqttComm() {
 
     mqttClient.setServer(MQTT_BROKER_HOST, MQTT_BROKER_PORT);
     mqttClient.setBufferSize(512);
+    mqttClient.setCallback(onMqttMessage);
 
     timeClient.begin();
 #endif
