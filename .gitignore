@@ -1,0 +1,32 @@
+# Python & Virtual Environments
+.python/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+
+# Secrets and Credentials
+.env
+firmware/include/secrets.h
+
+# Database and Runtime artifacts
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+logs/
+
+# PlatformIO build artifacts
+.pio/
+.vscode/
+.idea/
+
+# Operating System
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
