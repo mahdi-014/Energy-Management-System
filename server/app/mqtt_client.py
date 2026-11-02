@@ -61,7 +61,13 @@ def stop_internal_simulator():
 
 def _run_internal_simulator():
     global _internal_simulator_instance, _internal_sim_running
+    _internal_sim_running = True
     try:
+        import sys
+        from pathlib import Path
+        project_root = str(Path(__file__).resolve().parent.parent.parent)
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
         from simulator.mock_esp import MockESP8266
     except Exception as e:
         logger.warning(f"MockESP8266 simulator module not found: {e}. Internal simulation disabled.")
@@ -338,9 +344,10 @@ def _on_message(client, userdata, msg):
 
 def start_mqtt_client() -> Optional[Any]:
     global _mqtt_client_instance
+    start_internal_simulator()
+
     if mqtt is None:
-        logger.warning("paho-mqtt not available; starting internal simulation engine.")
-        start_internal_simulator()
+        logger.warning("paho-mqtt not available; running internal simulation engine.")
         return None
 
     try:
@@ -354,19 +361,9 @@ def start_mqtt_client() -> Optional[Any]:
         client.connect_async(settings.mqtt_broker, settings.mqtt_port, keepalive=60)
         client.loop_start()
         _mqtt_client_instance = client
-
-        # Watchdog: if not connected within 1.5s, start fallback simulation loop
-        def _broker_watchdog():
-            time.sleep(1.5)
-            if _mqtt_client_instance is None or not _mqtt_client_instance.is_connected():
-                logger.info(f"External MQTT broker at {settings.mqtt_broker}:{settings.mqtt_port} not connected. Activating internal simulator fallback.")
-                start_internal_simulator()
-
-        threading.Thread(target=_broker_watchdog, name="DCEMS-BrokerWatchdog", daemon=True).start()
         return client
     except Exception as e:
-        logger.warning(f"Could not start MQTT client: {e}. Activating internal simulator fallback.")
-        start_internal_simulator()
+        logger.warning(f"Could not start MQTT client: {e}. Internal simulator active.")
         return None
 
 def stop_mqtt_client():

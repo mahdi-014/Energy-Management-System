@@ -115,11 +115,11 @@ void loop() {
         prevTelemetryMillis = nowMs;
         publishSensorTelemetry(currentSnap);
         Serial.print(F("[TELEMETRY] Sent snapshot. LDR: "));
-        Serial.print(snap.ldrRaw);
+        Serial.print(currentSnap.ldrRaw);
         Serial.print(F(" Temp: "));
-        Serial.print(snap.temperatureC);
+        Serial.print(currentSnap.temperatureC);
         Serial.print(F(" PIR: "));
-        Serial.println(snap.pirMotion);
+        Serial.println(currentSnap.pirMotion);
     }
 
     // 4. Update LCD display every 5 seconds

@@ -83,7 +83,7 @@ static void flushEventQueue() {
         StaticJsonDocument<256> doc;
         char gapId[32];
         uint32_t now = getCurrentEpochUtc();
-        snprintf(gapId, sizeof(gapId), "gap_%lu", now);
+        snprintf(gapId, sizeof(gapId), "gap_%lu", (unsigned long)now);
 
         doc["event_id"] = gapId;
         doc["ts"] = now;
@@ -101,8 +101,10 @@ static void flushEventQueue() {
         droppedEventsCount = 0;
         gapStartTs = 0;
     }
+#endif
 }
 
+#ifdef ARDUINO
 static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     if (strcmp(topic, "dcems/" ROOM_IDENTIFIER "/cmd") != 0) return;
 
@@ -190,7 +192,6 @@ static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     mqttClient.publish("dcems/" ROOM_IDENTIFIER "/ack", ackBuf, false);
 }
 #endif
-}
 
 void initMqttComm() {
 #ifdef ARDUINO
@@ -280,7 +281,7 @@ void publishStateChangeEvent(
     StaticJsonDocument<256> doc;
     messageSequence++;
     char eventId[32];
-    snprintf(eventId, sizeof(eventId), "evt_%lu_%u", ts, messageSequence);
+    snprintf(eventId, sizeof(eventId), "evt_%lu_%u", (unsigned long)ts, messageSequence);
 
     doc["event_id"] = eventId;
     doc["timestamp_utc"] = ts;
@@ -310,7 +311,7 @@ void publishSensorTelemetry(const SensorSnapshot& snapshot) {
     messageSequence++;
     
     char eventId[32];
-    snprintf(eventId, sizeof(eventId), "evt_%lu_%u", snapshot.timestampUtc, messageSequence);
+    snprintf(eventId, sizeof(eventId), "evt_%lu_%u", (unsigned long)snapshot.timestampUtc, messageSequence);
 
     doc["event_id"] = eventId;
     doc["ts"] = snapshot.timestampUtc;
