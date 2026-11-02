@@ -25,3 +25,4 @@ INSERT OR IGNORE INTO config (key, value, changed_at, changed_by, history) VALUE
 ('manual_hold_sec', '600', strftime('%s', 'now'), 'system_init', '[]'),
 ('sensor_stale_sec', '60', strftime('%s', 'now'), 'system_init', '[]'),
 ('telemetry_interval_sec', '30', strftime('%s', 'now'), 'system_init', '[]');
+

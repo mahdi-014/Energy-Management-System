@@ -74,3 +74,4 @@ def get_config_value(key: str, default: Optional[str] = None, conn: Optional[sql
     finally:
         if close_after:
             conn.close()
+

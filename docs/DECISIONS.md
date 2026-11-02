@@ -57,3 +57,4 @@
 * **Context**: Ambient light varies dramatically depending on window orientation, blinds, artificial light reflection, and resistor tolerances on the LDR voltage divider. Uncalibrated LDR thresholds cause rapid relay oscillation.
 * **Decision**: The daylight waste detector and firmware daylight rule remain strictly inactive until an operator performs physical calibration in the target room and explicitly sets `calibration_flag = true` in the system settings. A mandatory 3-minute confirmation window and separate ON/OFF hysteresis thresholds are enforced.
 * **Consequences**: Eliminates false daylight shutdowns caused by transient cloud cover or artificial reflections.
+

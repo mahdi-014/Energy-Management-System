@@ -225,3 +225,4 @@ Published strictly by the ESP8266 or simulator in response to every `cmd`.
   Published immediately upon connection and every 30 seconds:
   - Payload: `{"status":"online","ts":1793607030,"firmware_version":"1.0.0","uptime_sec":1240}`
   - Retain: `true`, QoS: 1
+

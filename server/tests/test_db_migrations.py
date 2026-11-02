@@ -90,3 +90,4 @@ def test_config_table_seeded(temp_db):
     row = cur.fetchone()
     assert row is not None
     assert row["value"] == "300"
+

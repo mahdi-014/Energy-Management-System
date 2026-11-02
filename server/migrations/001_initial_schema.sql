@@ -138,3 +138,4 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL CHECK (role IN ('admin', 'viewer')),
     created_at INTEGER NOT NULL
 );
+

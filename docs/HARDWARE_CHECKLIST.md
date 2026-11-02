@@ -73,3 +73,4 @@ The prototype sketch maps the following pins. Verify each pin on the physical bo
 - Physical Verification Performed By: __________________________
 - Date of Inspection: __________________________
 - Authorization for Mains Connection: [ ] GRANTED  [ ] DENIED
+

@@ -36,3 +36,4 @@ def test_simulator_offline_queue_and_data_gap():
     assert mock.gap_dropped_count == 5
     # The oldest event in queue should now be sample_num 5
     assert mock.event_queue[0][1]["sample_num"] == 5
+

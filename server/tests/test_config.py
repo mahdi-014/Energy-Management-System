@@ -24,3 +24,4 @@ def test_settings_defaults():
     assert settings.jwt_algorithm == "HS256"
     assert settings.token_expire_minutes > 0
     assert len(settings.jwt_secret) >= 32
+

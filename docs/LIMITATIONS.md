@@ -59,3 +59,4 @@
 
 * **Single-Room Pilot Scope**: This MVP is engineered for a single representative room (`room1`). It does not include building-level aggregation, hierarchical multi-room scheduling, or microgrid power shedding.
 * **Local LAN Boundary**: The MQTT broker and FastAPI service are designed strictly for private office intranet operation. The system must not be exposed to the public internet without an enterprise reverse proxy, TLS encryption, and hardened OAuth2/OIDC single sign-on.
+

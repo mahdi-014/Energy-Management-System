@@ -106,3 +106,4 @@ def get_current_user_profile(user: Dict[str, Any] = Depends(get_current_user)):
 dashboard_dir = Path(__file__).resolve().parent.parent.parent / "dashboard"
 if dashboard_dir.exists():
     app.mount("/", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
+

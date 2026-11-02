@@ -43,3 +43,4 @@ class Settings(BaseModel):
     enable_adaptive_baseline: bool = Field(default=os.getenv("DCEMS_ENABLE_ADAPTIVE_BASELINE", "false").lower() == "true")
 
 settings = Settings()
+

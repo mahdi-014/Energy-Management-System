@@ -193,3 +193,4 @@ class MockESP8266:
             self.data_gap_occurred = False
             self.gap_dropped_count = 0
             self.gap_start_ts = None
+
