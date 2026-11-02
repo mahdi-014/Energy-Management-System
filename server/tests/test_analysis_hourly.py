@@ -89,3 +89,4 @@ def test_t14_hourly_runtime_distribution_fixture(test_db):
     labels = dist["labels"]
     assert "estimate" in labels["runtime_disclaimer"].lower()
     assert "energy_notice" in labels
+

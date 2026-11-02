@@ -101,3 +101,4 @@ def test_api_adaptive_baseline_toggle(test_db):
     req_disable = BaselineFlagRequest(enabled=False)
     res_dis = toggle_baseline_flag(req_disable, user=user)
     assert res_dis["adaptive_baseline_enabled"] is False
+
