@@ -15,6 +15,7 @@ from app.db import get_db_connection, run_migrations
 from app.auth import authenticate_user, create_access_token, get_current_user, seed_default_users
 from app.mqtt_client import start_mqtt_client, stop_mqtt_client, get_system_status
 from app.analysis import get_daily_runtime_breakdown
+from app.detectors import run_all_detectors, get_config_value, set_config_value
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,6 +58,11 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     username: str
+
+class DaylightCalibrationRequest(BaseModel):
+    daylight_on_threshold: Optional[int] = 350
+    daylight_off_threshold: Optional[int] = 450
+    set_calibrated: bool = True
 
 @app.get("/api/health")
 def health_check() -> Dict[str, Any]:
@@ -254,6 +260,137 @@ def get_runtime_sessions(
         cur.execute(query, params)
         rows = cur.fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+@app.get("/api/anomalies")
+def get_anomalies(
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    device_id: Optional[str] = None,
+    limit: int = 50
+) -> List[Dict[str, Any]]:
+    """
+    Returns detected anomaly alerts. Strictly alert-only.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = "SELECT * FROM anomaly_events WHERE 1=1"
+        params: List[Any] = []
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if severity:
+            query += " AND severity = ?"
+            params.append(severity)
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+        query += " ORDER BY timestamp_utc DESC LIMIT ?"
+        params.append(limit)
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("evidence"):
+                try:
+                    d["evidence"] = json.loads(d["evidence"])
+                except Exception:
+                    pass
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+@app.post("/api/anomalies/{anomaly_id}/ack")
+def acknowledge_anomaly(anomaly_id: str) -> Dict[str, Any]:
+    """
+    Acknowledges an active anomaly alert and logs to audit trail.
+    """
+    conn = get_db_connection()
+    now = int(time.time())
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT anomaly_id, status FROM anomaly_events WHERE anomaly_id = ?", (anomaly_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Anomaly event not found")
+
+        cur.execute("UPDATE anomaly_events SET status = 'acknowledged' WHERE anomaly_id = ?", (anomaly_id,))
+        cur.execute("""
+            INSERT INTO audit_log (log_id, timestamp_utc, event_type, actor, details)
+            VALUES (?, ?, 'anomaly_action', 'dashboard_user', ?)
+        """, (f"log_ack_{now}_{anomaly_id[:8]}", now, json.dumps({"action": "acknowledge", "anomaly_id": anomaly_id})))
+        conn.commit()
+        return {"status": "acknowledged", "anomaly_id": anomaly_id, "timestamp_utc": now}
+    finally:
+        conn.close()
+
+@app.post("/api/settings/calibrate-daylight")
+def calibrate_daylight(req: DaylightCalibrationRequest) -> Dict[str, Any]:
+    """
+    Calibrates daylight waste thresholds and unlocks the daylight detector.
+    """
+    conn = get_db_connection()
+    now = int(time.time())
+    try:
+        if req.daylight_on_threshold is not None:
+            set_config_value("daylight_on_threshold", str(req.daylight_on_threshold), changed_by="calibration_wizard", custom_conn=conn)
+        if req.daylight_off_threshold is not None:
+            set_config_value("daylight_off_threshold", str(req.daylight_off_threshold), changed_by="calibration_wizard", custom_conn=conn)
+
+        flag_val = "true" if req.set_calibrated else "false"
+        set_config_value("daylight_calibration_flag", flag_val, changed_by="calibration_wizard", custom_conn=conn)
+
+        conn.execute("""
+            INSERT INTO audit_log (log_id, timestamp_utc, event_type, actor, details)
+            VALUES (?, ?, 'settings_change', 'dashboard_operator', ?)
+        """, (f"log_calib_{now}", now, json.dumps({
+            "action": "calibrate_daylight",
+            "flag": flag_val,
+            "on_threshold": req.daylight_on_threshold,
+            "off_threshold": req.daylight_off_threshold
+        })))
+        conn.commit()
+
+        return {
+            "success": True,
+            "daylight_calibration_flag": (flag_val == "true"),
+            "daylight_on_threshold": req.daylight_on_threshold,
+            "daylight_off_threshold": req.daylight_off_threshold,
+            "message": "Daylight calibration applied successfully."
+        }
+    finally:
+        conn.close()
+
+@app.get("/api/settings/calibration-status")
+def get_calibration_status() -> Dict[str, Any]:
+    """
+    Returns current daylight calibration flag, thresholds, and latest LDR reading.
+    """
+    conn = get_db_connection()
+    try:
+        calib_flag = get_config_value("daylight_calibration_flag", "false", conn).strip().lower() == "true"
+        on_th = int(get_config_value("daylight_on_threshold", "350", conn))
+        off_th = int(get_config_value("daylight_off_threshold", "450", conn))
+        confirm_sec = int(get_config_value("daylight_confirmation_sec", "180", conn))
+
+        cur = conn.cursor()
+        cur.execute("SELECT ldr_raw, timestamp_utc FROM sensor_samples ORDER BY timestamp_utc DESC LIMIT 1")
+        row = cur.fetchone()
+        latest_ldr = row["ldr_raw"] if row else None
+
+        return {
+            "daylight_calibration_flag": calib_flag,
+            "daylight_on_threshold": on_th,
+            "daylight_off_threshold": off_th,
+            "daylight_confirmation_sec": confirm_sec,
+            "latest_ldr_raw": latest_ldr,
+            "status_text": "Calibrated & Active" if calib_flag else "Uncalibrated - Daylight detector locked for safety"
+        }
     finally:
         conn.close()
 

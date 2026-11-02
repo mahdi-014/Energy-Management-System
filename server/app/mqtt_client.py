@@ -13,6 +13,7 @@ except ImportError:
 from app.config import settings
 from app.db import get_db_connection
 from app.analysis import process_device_state_event, handle_outage_or_data_gap
+from app.detectors import run_all_detectors
 
 logger = logging.getLogger("dcems.mqtt")
 
@@ -154,6 +155,12 @@ def process_sensor_message(payload_bytes: bytes, server_receipt_ts: Optional[int
             "sensor_quality": quality
         }
 
+    # Trigger deterministic alert-only anomaly detectors
+    try:
+        run_all_detectors(current_ts=server_ts)
+    except Exception as e:
+        logger.error(f"Detector run error after sensor snapshot: {e}")
+
     return _live_system_status["latest_sensor"]
 
 def process_status_message(payload_bytes: bytes, server_receipt_ts: Optional[int] = None):
@@ -208,6 +215,11 @@ def process_event_message(payload_bytes: bytes, server_receipt_ts: Optional[int]
         handle_outage_or_data_gap(gap_start, gap_end)
     elif "requested_state" in data:
         process_device_state_event(data)
+
+    try:
+        run_all_detectors(current_ts=server_ts)
+    except Exception as e:
+        logger.error(f"Detector run error after state event: {e}")
 
 def _on_connect(client, userdata, flags, rc):
     if rc == 0:

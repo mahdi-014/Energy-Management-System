@@ -12,17 +12,15 @@
     const sessionsTbody = document.getElementById("sessions-tbody");
 
     function switchTab(target) {
+        const tabs = ["live", "events", "anomalies", "settings"];
+        tabs.forEach(t => {
+            const nav = document.getElementById("nav-" + t);
+            const pane = document.getElementById("tab-" + t);
+            if (nav) nav.classList.toggle("active", t === target);
+            if (pane) pane.style.display = (t === target) ? "block" : "none";
+        });
         if (target === "events") {
-            navLive.classList.remove("active");
-            navEvents.classList.add("active");
-            tabLive.style.display = "none";
-            tabEvents.style.display = "block";
             refreshAllEventsData();
-        } else {
-            navEvents.classList.remove("active");
-            navLive.classList.add("active");
-            tabEvents.style.display = "none";
-            tabLive.style.display = "block";
         }
     }
 
@@ -200,3 +198,4 @@
         }
     }, 10000);
 })();
+

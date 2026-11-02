@@ -75,3 +75,4 @@ def test_t11_offline_queue_overflow_and_data_gap_catchup():
         assert row["end_time_utc"] is not None
     finally:
         conn.close()
+

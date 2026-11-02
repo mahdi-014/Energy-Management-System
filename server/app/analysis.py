@@ -305,3 +305,4 @@ def get_daily_runtime_breakdown(
     finally:
         if should_close_conn:
             conn.close()
+

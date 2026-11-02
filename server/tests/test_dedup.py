@@ -45,3 +45,4 @@ def test_t12_event_deduplication():
         assert cur.fetchone()["cnt"] == 1
     finally:
         conn.close()
+

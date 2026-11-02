@@ -124,3 +124,4 @@ def test_invalid_device_or_state_rejected():
         assert process_device_state_event(bad_state, custom_conn=conn) is False
     finally:
         conn.close()
+

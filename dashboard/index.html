@@ -22,9 +22,10 @@
     <nav class="app-nav">
         <a href="#live" id="nav-live" class="nav-link active">Live Telemetry</a>
         <a href="#events" id="nav-events" class="nav-link">Events & History</a>
+        <a href="#anomalies" id="nav-anomalies" class="nav-link">Anomalies & Alerts</a>
+        <a href="#settings" id="nav-settings" class="nav-link">Settings & Calibration</a>
         <a href="#control" class="nav-link disabled" title="Available in Phase 4">Control</a>
         <a href="#analysis" class="nav-link disabled" title="Available in Phase 5">Analysis</a>
-        <a href="#settings" class="nav-link disabled" title="Available in Phase 3">Settings</a>
     </nav>
 
     <main class="container">
@@ -149,7 +150,6 @@
                     <span class="footnote-note">Formula: T = tOFF - tON</span>
                 </div>
                 <div class="card-grid" id="runtime-cards-grid">
-                    <!-- Populated dynamically via JS -->
                     <div class="card">
                         <div class="card-title">light_01 Runtime</div>
                         <div class="card-value" id="rt-light-val">0.00 <span class="unit">hrs</span></div>
@@ -243,6 +243,117 @@
                 </div>
             </section>
         </div>
+
+        <!-- TAB 3: ANOMALIES & ALERTS -->
+        <div id="tab-anomalies" class="tab-pane" style="display: none;">
+            <div class="alert-banner banner-info" style="margin-bottom: 1.5rem;">
+                <span class="banner-icon">ℹ️</span>
+                <span class="banner-message">
+                    <strong>Design Invariant:</strong> Detection != Authorization. Detecting an anomaly never automatically switches relays. All alerts are deterministic, explainable, and alert-only.
+                </span>
+            </div>
+
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Active & Historical Anomalies</h2>
+                    <div class="filter-controls">
+                        <select id="filter-anom-status" class="filter-select">
+                            <option value="">All Statuses</option>
+                            <option value="open" selected>Open Alerts</option>
+                            <option value="acknowledged">Acknowledged</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                        <select id="filter-anom-severity" class="filter-select">
+                            <option value="">All Severities</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="high">High</option>
+                            <option value="diagnostic">Diagnostic</option>
+                        </select>
+                        <button id="btn-refresh-anomalies" class="btn-refresh">Refresh</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="anomalies-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Device</th>
+                                <th>Anomaly Type</th>
+                                <th>Severity</th>
+                                <th>Observed vs Threshold</th>
+                                <th>Evidence / Context</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="anomalies-tbody">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">No anomaly alerts found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB 4: SETTINGS & CALIBRATION -->
+        <div id="tab-settings" class="tab-pane" style="display: none;">
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Daylight Sensor Calibration (LDR)</h2>
+                    <span class="footnote-note">Physical bench calibration required before daylight rule unlocks</span>
+                </div>
+                
+                <div class="card" style="max-width: 650px;">
+                    <div class="card-title">Daylight Calibration Wizard (ADR-007)</div>
+                    <div style="margin: 1rem 0;">
+                        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                            To prevent false triggers and relay flutter, daylight waste detection is gated until calibrated in the physical installation space.
+                        </p>
+                        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                            <span>Current Status:</span>
+                            <span id="calib-status-badge" class="badge badge-warning">Uncalibrated - Gated for Safety</span>
+                        </div>
+                        <div style="font-size: 0.9rem; margin-bottom: 1.5rem;">
+                            Current LDR ADC Value: <strong id="calib-current-ldr">----</strong> / 1023
+                        </div>
+                    </div>
+
+                    <form id="daylight-calib-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">
+                                    Dark Threshold (Light Turn-ON)
+                                </label>
+                                <input type="number" id="calib-on-thresh" class="filter-select" style="width: 100%;" min="0" max="1023" value="350" required>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">ADC value below which room is dark</span>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">
+                                    Bright Threshold (Light Turn-OFF)
+                                </label>
+                                <input type="number" id="calib-off-thresh" class="filter-select" style="width: 100%;" min="0" max="1023" value="450" required>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">ADC value above which daylight waste is flagged</span>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 1.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                            Hysteresis delta: <span id="calib-delta-preview">100</span> units (prevents relay cycling). Confirmation window: 180s (3 min).
+                        </div>
+
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button type="submit" class="btn-refresh" style="background-color: var(--color-success); color: #fff;">
+                                Save & Enable Daylight Detector
+                            </button>
+                            <button type="button" id="btn-calib-reset" class="btn-refresh" style="background-color: var(--color-danger); color: #fff;">
+                                Lock / Disable Detector
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </div>
     </main>
 
     <footer class="app-footer">
@@ -252,5 +363,6 @@
 
     <script src="/js/live.js"></script>
     <script src="/js/events.js"></script>
+    <script src="/js/anomalies.js"></script>
 </body>
 </html>
