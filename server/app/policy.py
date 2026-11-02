@@ -207,14 +207,29 @@ def issue_device_command(
             "source": source
         }
 
-        # Publish via background MQTT client if available
+        # Publish via background MQTT client if available, else route directly to internal simulator
         try:
-            from app.mqtt_client import _mqtt_client_instance
+            from app.mqtt_client import _mqtt_client_instance, get_internal_simulator
             if _mqtt_client_instance and _mqtt_client_instance.is_connected():
                 topic = f"dcems/{settings.room_id}/cmd"
                 _mqtt_client_instance.publish(topic, json.dumps(cmd_payload), qos=1)
+            elif get_internal_simulator() is not None:
+                sim = get_internal_simulator()
+                ack = sim.handle_command_payload(cmd_payload)
+                from app.mqtt_client import process_state_message, process_event_message
+                process_command_ack(json.dumps(ack).encode("utf-8"), custom_conn=conn)
+                process_state_message(json.dumps({
+                    "ts": int(time.time()),
+                    "mode": sim.mode,
+                    "devices": dict(sim.device_states),
+                    "observed_state": "assumed"
+                }).encode("utf-8"))
+                while sim.event_queue:
+                    top, ev, ret = sim.event_queue.pop(0)
+                    if "events" in top:
+                        process_event_message(json.dumps(ev).encode("utf-8"))
         except Exception as e:
-            logger.warning(f"Could not publish command to MQTT broker: {e}")
+            logger.warning(f"Could not publish or dispatch command: {e}")
 
         return {
             "success": True,
@@ -316,15 +331,31 @@ def issue_mode_command(
         })))
         conn.commit()
 
-        # Update live memory cache
+        # Update live memory cache and notify controller
         try:
-            from app.mqtt_client import _live_state_lock, _live_system_status, _mqtt_client_instance
+            from app.mqtt_client import (
+                _live_state_lock,
+                _live_system_status,
+                _mqtt_client_instance,
+                get_internal_simulator,
+                process_state_message
+            )
             with _live_state_lock:
                 _live_system_status["mode"] = new_mode
 
             if _mqtt_client_instance and _mqtt_client_instance.is_connected():
                 topic = f"dcems/{settings.room_id}/cmd"
                 _mqtt_client_instance.publish(topic, json.dumps(payload), qos=1)
+            elif get_internal_simulator() is not None:
+                sim = get_internal_simulator()
+                ack = sim.handle_command_payload(payload)
+                process_command_ack(json.dumps(ack).encode("utf-8"), custom_conn=conn)
+                process_state_message(json.dumps({
+                    "ts": int(time.time()),
+                    "mode": sim.mode,
+                    "devices": dict(sim.device_states),
+                    "observed_state": "assumed"
+                }).encode("utf-8"))
         except Exception:
             pass
 

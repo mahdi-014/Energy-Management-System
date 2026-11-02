@@ -37,6 +37,92 @@ _live_system_status: Dict[str, Any] = {
 }
 
 _mqtt_client_instance: Optional[Any] = None
+_internal_simulator_instance: Optional[Any] = None
+_internal_sim_thread: Optional[threading.Thread] = None
+_internal_sim_running: bool = False
+
+def get_internal_simulator() -> Optional[Any]:
+    global _internal_simulator_instance
+    return _internal_simulator_instance
+
+def start_internal_simulator():
+    global _internal_sim_thread, _internal_sim_running
+    if _internal_sim_running:
+        return
+    _internal_sim_running = True
+    _internal_sim_thread = threading.Thread(target=_run_internal_simulator, name="DCEMS-InternalSim", daemon=True)
+    _internal_sim_thread.start()
+
+def stop_internal_simulator():
+    global _internal_sim_running, _internal_sim_thread, _internal_simulator_instance
+    _internal_sim_running = False
+    _internal_sim_thread = None
+    _internal_simulator_instance = None
+
+def _run_internal_simulator():
+    global _internal_simulator_instance, _internal_sim_running
+    try:
+        from simulator.mock_esp import MockESP8266
+    except Exception as e:
+        logger.warning(f"MockESP8266 simulator module not found: {e}. Internal simulation disabled.")
+        return
+
+    logger.info("Initializing background MockESP8266 simulation fallback engine.")
+    _internal_simulator_instance = MockESP8266(room_id=settings.room_id)
+
+    # Initial online status and state
+    now = int(time.time())
+    process_status_message(json.dumps({
+        "status": "online",
+        "ts": now,
+        "firmware_version": "1.0.0-mock",
+        "uptime_sec": 1,
+        "room_id": settings.room_id
+    }).encode("utf-8"))
+
+    process_state_message(json.dumps({
+        "ts": now,
+        "mode": _internal_simulator_instance.mode,
+        "devices": dict(_internal_simulator_instance.device_states),
+        "observed_state": "assumed"
+    }).encode("utf-8"))
+
+    step = 0
+    while _internal_sim_running:
+        time.sleep(3.0)
+        if not _internal_sim_running:
+            break
+        step += 1
+        now = int(time.time())
+        try:
+            # Vary PIR motion, LDR daylight, temperature, and humidity
+            pir_val = 1 if (step % 6 in (0, 1)) else 0
+            ldr_val = 520 + int(35 * ((step % 10) - 5))
+            temp_val = 27.5 + round(0.4 * ((step % 8) - 4), 1)
+            hum_val = 62.0 + round(0.8 * ((step % 6) - 3), 1)
+
+            snapshot = _internal_simulator_instance.publish_sensor_snapshot(
+                pir=pir_val,
+                ldr=ldr_val,
+                temp=temp_val,
+                hum=hum_val
+            )
+            process_sensor_message(json.dumps(snapshot).encode("utf-8"))
+
+            # Periodic heartbeat
+            if step % 5 == 0:
+                process_status_message(json.dumps({
+                    "status": "online",
+                    "ts": now,
+                    "firmware_version": "1.0.0-mock",
+                    "uptime_sec": step * 3,
+                    "room_id": settings.room_id
+                }).encode("utf-8"))
+
+            # Run detectors periodically
+            run_all_detectors(current_ts=now)
+        except Exception as e:
+            logger.debug(f"Internal simulator step exception: {e}")
 
 def get_system_status() -> Dict[str, Any]:
     with _live_state_lock:
@@ -225,6 +311,7 @@ def process_event_message(payload_bytes: bytes, server_receipt_ts: Optional[int]
 def _on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Connected to Mosquitto MQTT broker.")
+        stop_internal_simulator()
         room = settings.room_id
         client.subscribe(f"dcems/{room}/sensors", qos=0)
         client.subscribe(f"dcems/{room}/status", qos=1)
@@ -233,6 +320,7 @@ def _on_connect(client, userdata, flags, rc):
         client.subscribe(f"dcems/{room}/ack", qos=1)
     else:
         logger.error(f"Failed to connect to MQTT broker, return code {rc}")
+        start_internal_simulator()
 
 def _on_message(client, userdata, msg):
     topic = msg.topic
@@ -251,7 +339,8 @@ def _on_message(client, userdata, msg):
 def start_mqtt_client() -> Optional[Any]:
     global _mqtt_client_instance
     if mqtt is None:
-        logger.warning("paho-mqtt not available; running in offline simulation mode.")
+        logger.warning("paho-mqtt not available; starting internal simulation engine.")
+        start_internal_simulator()
         return None
 
     try:
@@ -265,13 +354,24 @@ def start_mqtt_client() -> Optional[Any]:
         client.connect_async(settings.mqtt_broker, settings.mqtt_port, keepalive=60)
         client.loop_start()
         _mqtt_client_instance = client
+
+        # Watchdog: if not connected within 1.5s, start fallback simulation loop
+        def _broker_watchdog():
+            time.sleep(1.5)
+            if _mqtt_client_instance is None or not _mqtt_client_instance.is_connected():
+                logger.info(f"External MQTT broker at {settings.mqtt_broker}:{settings.mqtt_port} not connected. Activating internal simulator fallback.")
+                start_internal_simulator()
+
+        threading.Thread(target=_broker_watchdog, name="DCEMS-BrokerWatchdog", daemon=True).start()
         return client
     except Exception as e:
-        logger.error(f"Could not start MQTT client: {e}")
+        logger.warning(f"Could not start MQTT client: {e}. Activating internal simulator fallback.")
+        start_internal_simulator()
         return None
 
 def stop_mqtt_client():
     global _mqtt_client_instance
+    stop_internal_simulator()
     if _mqtt_client_instance:
         try:
             _mqtt_client_instance.loop_stop()
