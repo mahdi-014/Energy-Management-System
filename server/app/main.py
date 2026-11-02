@@ -24,6 +24,7 @@ from app.analysis import (
 )
 from app.detectors import run_all_detectors, get_config_value, set_config_value
 from app.policy import issue_device_command, issue_mode_command
+from app.mqtt_broker import start_embedded_broker, stop_embedded_broker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,11 +36,15 @@ async def lifespan(app: FastAPI):
     finally:
         conn.close()
 
+    # Start embedded LAN-accessible MQTT broker on port 1884
+    start_embedded_broker(port=settings.mqtt_port)
+
     # Start background MQTT subscriber
     start_mqtt_client()
     yield
     # Shutdown logic
     stop_mqtt_client()
+    stop_embedded_broker()
 
 app = FastAPI(
     title="DCEMS Backend API",

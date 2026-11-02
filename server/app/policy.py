@@ -96,7 +96,7 @@ def issue_device_command(
     source: str = "manual",
     reason: str = "operator_toggle",
     trigger_anomaly_id: Optional[str] = None,
-    ttl_sec: int = 60,
+    ttl_sec: int = 86400,
     actor: str = "dashboard_user",
     custom_conn: Optional[sqlite3.Connection] = None
 ) -> Dict[str, Any]:
@@ -313,7 +313,7 @@ def issue_mode_command(
         "command_type": "set_mode",
         "mode": new_mode,
         "issued_at": now,
-        "expires_at": now + 60,
+        "expires_at": now + 86400,
         "source": source
     }
 
