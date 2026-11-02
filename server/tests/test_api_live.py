@@ -17,9 +17,21 @@ def live_api_db(tmp_path):
         _live_system_status["is_online"] = True
         _live_system_status["last_seen_utc"] = int(time.time())
         _live_system_status["latest_sensor"] = None
+        _live_system_status["devices"] = {
+            "light_01": "OFF",
+            "fan_01": "OFF",
+            "ac_01": "OFF",
+            "pc_01": "OFF"
+        }
     yield db_file
     with _live_state_lock:
         _live_system_status["latest_sensor"] = None
+        _live_system_status["devices"] = {
+            "light_01": "OFF",
+            "fan_01": "OFF",
+            "ac_01": "OFF",
+            "pc_01": "OFF"
+        }
 
 def test_get_live_telemetry_schema_and_labels(live_api_db):
     """FR-18: Verify mandatory disclaimers and live telemetry schema."""
@@ -80,3 +92,4 @@ def test_get_sensor_readings_history(live_api_db):
     assert len(filtered) == 3
     assert filtered[0]["timestamp_utc"] == base_ts + 30
     assert filtered[-1]["timestamp_utc"] == base_ts + 90
+

@@ -12,6 +12,7 @@ except ImportError:
 
 from app.config import settings
 from app.db import get_db_connection
+from app.analysis import process_device_state_event, handle_outage_or_data_gap
 
 logger = logging.getLogger("dcems.mqtt")
 
@@ -191,6 +192,23 @@ def process_state_message(payload_bytes: bytes, server_receipt_ts: Optional[int]
             if dev in _live_system_status["devices"]:
                 _live_system_status["devices"][dev] = state
 
+def process_event_message(payload_bytes: bytes, server_receipt_ts: Optional[int] = None):
+    server_ts = server_receipt_ts or int(time.time())
+    try:
+        data = json.loads(payload_bytes.decode("utf-8"))
+    except Exception as e:
+        logger.error(f"Failed to parse event JSON: {e}")
+        return
+
+    event_type = data.get("type")
+    if event_type == "data_gap":
+        logger.warning(f"Data gap detected from firmware: {data}")
+        gap_start = data.get("gap_start_ts")
+        gap_end = data.get("gap_end_ts", server_ts)
+        handle_outage_or_data_gap(gap_start, gap_end)
+    elif "requested_state" in data:
+        process_device_state_event(data)
+
 def _on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Connected to Mosquitto MQTT broker.")
@@ -211,6 +229,8 @@ def _on_message(client, userdata, msg):
         process_status_message(msg.payload)
     elif topic == f"dcems/{room}/state":
         process_state_message(msg.payload)
+    elif topic == f"dcems/{room}/events":
+        process_event_message(msg.payload)
 
 def start_mqtt_client() -> Optional[Any]:
     global _mqtt_client_instance
@@ -243,3 +263,4 @@ def stop_mqtt_client():
         except Exception:
             pass
         _mqtt_client_instance = None
+

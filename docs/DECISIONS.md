@@ -58,3 +58,13 @@
 * **Decision**: The daylight waste detector and firmware daylight rule remain strictly inactive until an operator performs physical calibration in the target room and explicitly sets `calibration_flag = true` in the system settings. A mandatory 3-minute confirmation window and separate ON/OFF hysteresis thresholds are enforced.
 * **Consequences**: Eliminates false daylight shutdowns caused by transient cloud cover or artificial reflections.
 
+---
+
+## ADR-008: Outage Session Closure (`end_known = 0`) & Deduplication by `event_id`
+* **Status**: Accepted
+* **Context**: When an unannounced power outage or RAM queue data gap occurs while an appliance is ON, the actual switch-off time cannot be known with certainty. Silently assuming the load remained continuously ON distorts operational metrics, while guessing an arbitrary turn-off time fabricates telemetry. Furthermore, MQTT QoS 1 retries and offline queue flushes can retransmit identical events.
+* **Decision**:
+  1. Deduplicate all incoming state transition events by unique `event_id`. Duplicate deliveries are ignored and do not alter state or session tables.
+  2. When an outage or data gap occurs, close any ongoing open session at `gap_start_ts` (or `gap_end_ts`), explicitly flagging `end_known = 0`.
+  3. Aggregate daily runtime using $T = t_{\text{OFF}} - t_{\text{ON}}$, reporting completed and interrupted sessions separately.
+* **Consequences**: Mathematical integrity of runtime calculation is preserved without fabricating data or compounding errors.

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "sensors.h"
 #include "mqtt_comm.h"
+#include "state.h"
 
 // 16x2 I2C Character LCD (PCF8574 address 0x27)
 static LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -19,23 +20,11 @@ void setup() {
     Serial.println();
     Serial.println(F("========================================"));
     Serial.println(F("DC Office Energy Management System (DCEMS)"));
-    Serial.println(F("Firmware Version: 1.0.0 (Phase 1 Monitor)"));
+    Serial.println(F("Firmware Version: 1.0.0 (Phase 2 State & Events)"));
     Serial.println(F("========================================"));
 
-    // ==========================================
-    // CRITICAL SAFETY BOOT INVARIANT
-    // Drive all relays to de-energized (OFF) state
-    // BEFORE starting network or peripheral init.
-    // Active-LOW logic: HIGH = Relay De-energized.
-    // ==========================================
-    digitalWrite(PIN_RELAY_LT, RELAY_INACTIVE_LEVEL);
-    digitalWrite(PIN_RELAY_FN, RELAY_INACTIVE_LEVEL);
-    digitalWrite(PIN_RELAY_PC, RELAY_INACTIVE_LEVEL);
-    digitalWrite(PIN_RELAY_AC, RELAY_INACTIVE_LEVEL);
-    pinMode(PIN_RELAY_LT, OUTPUT);
-    pinMode(PIN_RELAY_FN, OUTPUT);
-    pinMode(PIN_RELAY_PC, OUTPUT);
-    pinMode(PIN_RELAY_AC, OUTPUT);
+    // Initialize state tracking and set all relays de-energized
+    initState();
 
     // Initialize I2C LCD
     Wire.begin(PIN_LCD_SDA, PIN_LCD_SCL);
@@ -133,3 +122,4 @@ void loop() {
         updateLcdDisplay(snap);
     }
 }
+

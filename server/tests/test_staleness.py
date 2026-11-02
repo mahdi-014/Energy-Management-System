@@ -67,3 +67,4 @@ def test_stale_after_60_seconds_t1(clean_status):
 
     status = get_system_status()
     assert status["is_stale"] is True
+

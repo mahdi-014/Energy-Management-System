@@ -108,3 +108,4 @@ def test_derive_occupancy_state():
     # Fault or no motion timestamp
     assert derive_occupancy_state(pir_motion=0, last_motion_at=None, current_ts=now, quality="ok") == "unknown"
     assert derive_occupancy_state(pir_motion=0, last_motion_at=now - 100, current_ts=now, quality="fault") == "unknown"
+

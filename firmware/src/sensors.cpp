@@ -125,3 +125,4 @@ bool isSensorDataFresh(uint32_t currentEpochSec) {
     return (currentEpochSec >= latestSnapshot.timestampUtc) &&
            ((currentEpochSec - latestSnapshot.timestampUtc) <= SENSOR_STALE_SEC);
 }
+

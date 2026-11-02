@@ -14,6 +14,7 @@ from app.config import settings
 from app.db import get_db_connection, run_migrations
 from app.auth import authenticate_user, create_access_token, get_current_user, seed_default_users
 from app.mqtt_client import start_mqtt_client, stop_mqtt_client, get_system_status
+from app.analysis import get_daily_runtime_breakdown
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -183,6 +184,76 @@ def get_sensor_readings(
         rows = cur.fetchall()
         # Return chronological order for charts
         return [dict(r) for r in reversed(rows)]
+    finally:
+        conn.close()
+
+@app.get("/api/events")
+def get_device_events(
+    device_id: Optional[str] = None,
+    state_source: Optional[str] = None,
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Returns historical device state transition events.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = "SELECT * FROM device_state_events WHERE 1=1"
+        params: List[Any] = []
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+        if state_source:
+            query += " AND state_source = ?"
+            params.append(state_source)
+        if from_ts is not None:
+            query += " AND timestamp_utc >= ?"
+            params.append(from_ts)
+        if to_ts is not None:
+            query += " AND timestamp_utc <= ?"
+            params.append(to_ts)
+        query += " ORDER BY timestamp_utc DESC LIMIT ?"
+        params.append(limit)
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+@app.get("/api/analysis/runtime")
+def get_runtime_analysis(date_utc: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Returns aggregated runtime metrics per device for a specific UTC date.
+    Strictly follows T = tOFF - tON, honest estimates only, no kWh or cost.
+    """
+    return get_daily_runtime_breakdown(date_utc)
+
+@app.get("/api/analysis/sessions")
+def get_runtime_sessions(
+    device_id: Optional[str] = None,
+    limit: int = 50
+) -> List[Dict[str, Any]]:
+    """
+    Returns recent runtime sessions for auditability.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = "SELECT * FROM runtime_sessions WHERE 1=1"
+        params: List[Any] = []
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+        query += " ORDER BY start_time_utc DESC LIMIT ?"
+        params.append(limit)
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

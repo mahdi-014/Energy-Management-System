@@ -24,3 +24,4 @@ SensorSnapshot getLatestSnapshot();
 bool isSensorDataFresh(uint32_t currentEpochSec);
 
 #endif // SENSORS_H
+

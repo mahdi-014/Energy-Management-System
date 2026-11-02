@@ -102,3 +102,4 @@ static const DeviceConfig DEVICE_TABLE[4] = {
 };
 
 #endif // CONFIG_H
+

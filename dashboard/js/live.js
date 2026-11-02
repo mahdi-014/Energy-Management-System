@@ -164,3 +164,4 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchLiveTelemetry();
     setInterval(fetchLiveTelemetry, POLL_INTERVAL_MS);
 });
+

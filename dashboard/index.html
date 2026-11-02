@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DC Office EMS - Room 1 Monitor</title>
+    <title>DC Office EMS - Room 1 Monitor & History</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -20,9 +20,9 @@
     </header>
 
     <nav class="app-nav">
-        <a href="#live" class="nav-link active">Live Telemetry</a>
+        <a href="#live" id="nav-live" class="nav-link active">Live Telemetry</a>
+        <a href="#events" id="nav-events" class="nav-link">Events & History</a>
         <a href="#control" class="nav-link disabled" title="Available in Phase 4">Control</a>
-        <a href="#events" class="nav-link disabled" title="Available in Phase 2">Events & History</a>
         <a href="#analysis" class="nav-link disabled" title="Available in Phase 5">Analysis</a>
         <a href="#settings" class="nav-link disabled" title="Available in Phase 3">Settings</a>
     </nav>
@@ -34,100 +34,215 @@
             <span id="status-banner-text" class="banner-message">Warning: Telemetry is stale or controller is disconnected.</span>
         </div>
 
-        <section class="section-block">
-            <div class="section-header">
-                <h2>Environmental Sensors</h2>
-                <span class="footnote-note">Snapshot updated every 30s</span>
+        <!-- TAB 1: LIVE TELEMETRY -->
+        <div id="tab-live" class="tab-pane active">
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Environmental Sensors</h2>
+                    <span class="footnote-note">Snapshot updated every 30s</span>
+                </div>
+                <div class="card-grid">
+                    <!-- Temperature Card -->
+                    <div class="card">
+                        <div class="card-title">Temperature</div>
+                        <div class="card-value" id="val-temp">--.- <span class="unit">°C</span></div>
+                        <div class="card-footer" id="val-temp-status">Sensor: Waiting...</div>
+                    </div>
+
+                    <!-- Humidity Card -->
+                    <div class="card">
+                        <div class="card-title">Relative Humidity</div>
+                        <div class="card-value" id="val-hum">-- <span class="unit">%</span></div>
+                        <div class="card-footer" id="val-hum-status">Sensor: Waiting...</div>
+                    </div>
+
+                    <!-- Ambient Light Card -->
+                    <div class="card">
+                        <div class="card-title">Ambient Light (LDR)</div>
+                        <div class="card-value" id="val-light">-- <span class="unit">%</span></div>
+                        <div class="card-footer" id="val-ldr-raw">Raw ADC: ---- / 1023</div>
+                    </div>
+
+                    <!-- Occupancy & Motion Card -->
+                    <div class="card">
+                        <div class="card-title">Occupancy Inference</div>
+                        <div class="card-value occupancy-badge" id="val-occupancy">Unknown</div>
+                        <div class="card-footer">
+                            <span id="val-last-motion">Last motion: Never</span>
+                            <div class="disclaimer-note">Note: PIR detects motion, not people.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Appliance Commanded States</h2>
+                    <span class="footnote-note">Estimates based on commanded relay state</span>
+                </div>
+                <div class="card-grid">
+                    <!-- Light 01 -->
+                    <div class="card appliance-card">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">light_01</div>
+                            <span class="badge badge-success">Auto-Eligible</span>
+                        </div>
+                        <div class="appliance-state" id="state-light">OFF</div>
+                        <div class="card-footer">
+                            <span class="estimate-label">Estimate based on commanded state</span>
+                        </div>
+                    </div>
+
+                    <!-- Fan 01 -->
+                    <div class="card appliance-card">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">fan_01</div>
+                            <span class="badge badge-success">Auto-Eligible</span>
+                        </div>
+                        <div class="appliance-state" id="state-fan">OFF</div>
+                        <div class="card-footer">
+                            <span class="estimate-label">Estimate based on commanded state</span>
+                        </div>
+                    </div>
+
+                    <!-- AC 01 -->
+                    <div class="card appliance-card safety-locked">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">ac_01</div>
+                            <span class="badge badge-danger">Alert-Only Lock</span>
+                        </div>
+                        <div class="appliance-state" id="state-ac">OFF</div>
+                        <div class="card-footer">
+                            <span class="estimate-label">Compressor safety: Auto-switch prohibited</span>
+                        </div>
+                    </div>
+
+                    <!-- PC 01 -->
+                    <div class="card appliance-card safety-locked">
+                        <div class="card-header-flex">
+                            <div class="appliance-id">pc_01</div>
+                            <span class="badge badge-danger">Alert-Only Lock</span>
+                        </div>
+                        <div class="appliance-state" id="state-pc">OFF</div>
+                        <div class="card-footer">
+                            <span class="estimate-label">Data safety: Power cutoff prohibited</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB 2: EVENTS & RUNTIME HISTORY -->
+        <div id="tab-events" class="tab-pane" style="display: none;">
+            <div class="alert-banner banner-info" style="margin-bottom: 1.5rem;">
+                <span class="banner-icon">ℹ️</span>
+                <span class="banner-message">
+                    <strong>Notice:</strong> All operational metrics are estimates based on commanded relay state.
+                    Zero power (kWh) or financial cost is measured or implied.
+                </span>
             </div>
-            <div class="card-grid">
-                <!-- Temperature Card -->
-                <div class="card">
-                    <div class="card-title">Temperature</div>
-                    <div class="card-value" id="val-temp">--.- <span class="unit">°C</span></div>
-                    <div class="card-footer" id="val-temp-status">Sensor: Waiting...</div>
-                </div>
 
-                <!-- Humidity Card -->
-                <div class="card">
-                    <div class="card-title">Relative Humidity</div>
-                    <div class="card-value" id="val-hum">-- <span class="unit">%</span></div>
-                    <div class="card-footer" id="val-hum-status">Sensor: Waiting...</div>
+            <!-- Daily Runtime Summary Section -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Daily Runtime Breakdown (UTC Today)</h2>
+                    <span class="footnote-note">Formula: T = tOFF - tON</span>
                 </div>
+                <div class="card-grid" id="runtime-cards-grid">
+                    <!-- Populated dynamically via JS -->
+                    <div class="card">
+                        <div class="card-title">light_01 Runtime</div>
+                        <div class="card-value" id="rt-light-val">0.00 <span class="unit">hrs</span></div>
+                        <div class="card-footer" id="rt-light-foot">0 completed, 0 interrupted</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">fan_01 Runtime</div>
+                        <div class="card-value" id="rt-fan-val">0.00 <span class="unit">hrs</span></div>
+                        <div class="card-footer" id="rt-fan-foot">0 completed, 0 interrupted</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">ac_01 Runtime</div>
+                        <div class="card-value" id="rt-ac-val">0.00 <span class="unit">hrs</span></div>
+                        <div class="card-footer" id="rt-ac-foot">0 completed, 0 interrupted</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">pc_01 Runtime</div>
+                        <div class="card-value" id="rt-pc-val">0.00 <span class="unit">hrs</span></div>
+                        <div class="card-footer" id="rt-pc-foot">0 completed, 0 interrupted</div>
+                    </div>
+                </div>
+            </section>
 
-                <!-- Ambient Light Card -->
-                <div class="card">
-                    <div class="card-title">Ambient Light (LDR)</div>
-                    <div class="card-value" id="val-light">-- <span class="unit">%</span></div>
-                    <div class="card-footer" id="val-ldr-raw">Raw ADC: ---- / 1023</div>
+            <!-- State Transition Events History -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Device State Transition Events</h2>
+                    <div class="filter-controls">
+                        <select id="filter-device" class="filter-select">
+                            <option value="">All Devices</option>
+                            <option value="light_01">light_01</option>
+                            <option value="fan_01">fan_01</option>
+                            <option value="ac_01">ac_01</option>
+                            <option value="pc_01">pc_01</option>
+                        </select>
+                        <select id="filter-source" class="filter-select">
+                            <option value="">All Sources</option>
+                            <option value="manual">manual</option>
+                            <option value="local_rule">local_rule</option>
+                            <option value="server_proposal">server_proposal</option>
+                        </select>
+                        <button id="btn-refresh-events" class="btn-refresh">Refresh</button>
+                    </div>
                 </div>
+                <div class="table-container">
+                    <table class="data-table" id="events-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp (UTC / Local)</th>
+                                <th>Device</th>
+                                <th>State</th>
+                                <th>Source</th>
+                                <th>Reason Code</th>
+                                <th>Mode</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-tbody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">No state transition events recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-                <!-- Occupancy & Motion Card -->
-                <div class="card">
-                    <div class="card-title">Occupancy Inference</div>
-                    <div class="card-value occupancy-badge" id="val-occupancy">Unknown</div>
-                    <div class="card-footer">
-                        <span id="val-last-motion">Last motion: Never</span>
-                        <div class="disclaimer-note">Note: PIR detects motion, not people.</div>
-                    </div>
+            <!-- Audit: Recent Runtime Sessions -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Recent Runtime Sessions Audit</h2>
+                    <span class="footnote-note">Interrupted sessions indicate power outage or data loss</span>
                 </div>
-            </div>
-        </section>
-
-        <section class="section-block">
-            <div class="section-header">
-                <h2>Appliance Commanded States</h2>
-                <span class="footnote-note">Estimates based on commanded relay state</span>
-            </div>
-            <div class="card-grid">
-                <!-- Light 01 -->
-                <div class="card appliance-card">
-                    <div class="card-header-flex">
-                        <div class="appliance-id">light_01</div>
-                        <span class="badge badge-success">Auto-Eligible</span>
-                    </div>
-                    <div class="appliance-state" id="state-light">OFF</div>
-                    <div class="card-footer">
-                        <span class="estimate-label">Estimate based on commanded state</span>
-                    </div>
+                <div class="table-container">
+                    <table class="data-table" id="sessions-table">
+                        <thead>
+                            <tr>
+                                <th>Session ID</th>
+                                <th>Device</th>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Duration</th>
+                                <th>Integrity Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessions-tbody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No runtime sessions recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-
-                <!-- Fan 01 -->
-                <div class="card appliance-card">
-                    <div class="card-header-flex">
-                        <div class="appliance-id">fan_01</div>
-                        <span class="badge badge-success">Auto-Eligible</span>
-                    </div>
-                    <div class="appliance-state" id="state-fan">OFF</div>
-                    <div class="card-footer">
-                        <span class="estimate-label">Estimate based on commanded state</span>
-                    </div>
-                </div>
-
-                <!-- AC 01 -->
-                <div class="card appliance-card safety-locked">
-                    <div class="card-header-flex">
-                        <div class="appliance-id">ac_01</div>
-                        <span class="badge badge-danger">Alert-Only Lock</span>
-                    </div>
-                    <div class="appliance-state" id="state-ac">OFF</div>
-                    <div class="card-footer">
-                        <span class="estimate-label">Compressor safety: Auto-switch prohibited</span>
-                    </div>
-                </div>
-
-                <!-- PC 01 -->
-                <div class="card appliance-card safety-locked">
-                    <div class="card-header-flex">
-                        <div class="appliance-id">pc_01</div>
-                        <span class="badge badge-danger">Alert-Only Lock</span>
-                    </div>
-                    <div class="appliance-state" id="state-pc">OFF</div>
-                    <div class="card-footer">
-                        <span class="estimate-label">Data safety: Power cutoff prohibited</span>
-                    </div>
-                </div>
-            </div>
-        </section>
+            </section>
+        </div>
     </main>
 
     <footer class="app-footer">
@@ -136,5 +251,6 @@
     </footer>
 
     <script src="/js/live.js"></script>
+    <script src="/js/events.js"></script>
 </body>
 </html>

@@ -1,7 +1,6 @@
 import json
 import time
 import uuid
-import random
 from typing import Dict, Any, Optional
 
 try:
@@ -11,9 +10,9 @@ except ImportError:
 
 class MockESP8266:
     """
-    Host-side ESP8266 Simulator (Phase 1).
-    Emulates sensor telemetry, retain state, Last Will and Testament,
-    and offline queueing on dcems/room1/#.
+    Host-side ESP8266 Simulator (Phase 2).
+    Emulates sensor telemetry, relay state transitions, event emission,
+    retained state, Last Will and Testament, and bounded offline queueing.
     """
     def __init__(
         self,
@@ -53,6 +52,7 @@ class MockESP8266:
 
         self.last_motion_time = int(time.time())
         self.last_switch_time = {d: int(time.time()) for d in self.device_states}
+        self.last_manual_command_time = 0
         
         self.client = None
         self.is_connected = False
@@ -98,7 +98,6 @@ class MockESP8266:
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             self.is_connected = True
-            # Publish online heartbeat
             online_payload = json.dumps({
                 "status": "online",
                 "ts": int(time.time()),
@@ -108,13 +107,8 @@ class MockESP8266:
             })
             self.client.publish(f"dcems/{self.room_id}/status", online_payload, qos=1, retain=True)
 
-            # Publish initial device state (retained)
             self.publish_state()
-
-            # Subscribe to command topic
             self.client.subscribe(f"dcems/{self.room_id}/cmd", qos=1)
-
-            # Flush queued offline events if any
             self._flush_event_queue()
         else:
             self.is_connected = False
@@ -126,15 +120,63 @@ class MockESP8266:
         pass
 
     def publish_state(self):
-        if not self.client or not self.is_connected:
-            return
-        payload = json.dumps({
+        payload = {
             "ts": int(time.time()),
             "mode": self.mode,
             "devices": self.device_states,
             "observed_state": "assumed"
-        })
-        self.client.publish(f"dcems/{self.room_id}/state", payload, qos=1, retain=True)
+        }
+        topic = f"dcems/{self.room_id}/state"
+        payload_bytes = json.dumps(payload).encode("utf-8")
+
+        if self.is_connected and self.client:
+            self.client.publish(topic, payload_bytes, qos=1, retain=True)
+        else:
+            self._enqueue_event(topic, payload, retained=True)
+
+    def set_device_state(
+        self,
+        device_id: str,
+        state: str,
+        source: str = "manual",
+        reason: str = "operator_toggle",
+        ts: Optional[int] = None
+    ) -> bool:
+        if device_id not in self.device_states:
+            return False
+        if self.device_states[device_id] == state:
+            return False
+
+        now = ts or int(time.time())
+        self.message_seq += 1
+        self.device_states[device_id] = state
+        self.last_switch_time[device_id] = now
+        if source == "manual":
+            self.last_manual_command_time = now
+
+        event_payload = {
+            "event_id": f"evt_{now}_{self.message_seq}",
+            "timestamp_utc": now,
+            "device_id": device_id,
+            "requested_state": state,
+            "state_source": source,
+            "reason_code": reason,
+            "controller_mode": self.mode,
+            "command_status": "applied",
+            "observed_state": "assumed"
+        }
+
+        topic = f"dcems/{self.room_id}/events"
+        payload_bytes = json.dumps(event_payload).encode("utf-8")
+
+        if self.is_connected and self.client:
+            self.client.publish(topic, payload_bytes, qos=1, retain=False)
+            self.publish_state()
+        else:
+            self._enqueue_event(topic, event_payload, retained=False)
+            self.publish_state()
+
+        return True
 
     def publish_sensor_snapshot(
         self,
@@ -150,12 +192,10 @@ class MockESP8266:
         if pir == 1:
             self.last_motion_time = now
 
-        # Compute light percentage from raw ADC if valid
         light_pct = None
         if ldr is not None and 0 <= ldr <= 1023:
             light_pct = round((ldr / 1023.0) * 100)
 
-        # Validity check
         is_valid = True
         if ldr is None or not (0 <= ldr <= 1023):
             is_valid = False
@@ -186,26 +226,26 @@ class MockESP8266:
         if self.is_connected and self.client:
             self.client.publish(topic, payload_bytes, qos=0)
         else:
-            self._enqueue_event("sensor", payload)
+            self._enqueue_event(topic, payload, retained=False)
 
         return payload
 
-    def _enqueue_event(self, event_type: str, data: Dict[str, Any]):
+    def _enqueue_event(self, topic: str, data: Dict[str, Any], retained: bool = False):
         if len(self.event_queue) >= self.max_queue_size:
             if not self.data_gap_occurred:
                 self.data_gap_occurred = True
                 self.gap_start_ts = int(time.time())
             self.event_queue.pop(0)
             self.gap_dropped_count += 1
-        self.event_queue.append((event_type, data))
+        self.event_queue.append((topic, data, retained))
 
     def _flush_event_queue(self):
         while self.event_queue and self.is_connected:
-            _, data = self.event_queue.pop(0)
-            self.client.publish(f"dcems/{self.room_id}/events", json.dumps(data), qos=1)
+            topic, data, retained = self.event_queue.pop(0)
+            self.client.publish(topic, json.dumps(data), qos=1, retain=retained)
         if self.data_gap_occurred and self.is_connected:
             gap_payload = {
-                "event_id": str(uuid.uuid4()),
+                "event_id": f"gap_{int(time.time())}",
                 "ts": int(time.time()),
                 "type": "data_gap",
                 "gap_start_ts": self.gap_start_ts,

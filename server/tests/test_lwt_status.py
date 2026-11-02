@@ -43,3 +43,4 @@ def test_heartbeat_online_transition():
     assert status["firmware_version"] == "1.0.0"
     assert status["uptime_sec"] == 420
     assert status["last_heartbeat_utc"] == now
+
