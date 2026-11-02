@@ -25,7 +25,7 @@
         <a href="#anomalies" id="nav-anomalies" class="nav-link">Anomalies & Alerts</a>
         <a href="#control" id="nav-control" class="nav-link">Control</a>
         <a href="#settings" id="nav-settings" class="nav-link">Settings & Calibration</a>
-        <a href="#analysis" class="nav-link disabled" title="Available in Phase 5">Analysis</a>
+        <a href="#analysis" id="nav-analysis" class="nav-link">Analysis</a>
     </nav>
 
     <main class="container">
@@ -497,6 +497,68 @@
                 </div>
             </section>
         </div>
+
+        <!-- TAB 6: DATA-DRIVEN ANALYSIS & PROFILES -->
+        <div id="tab-analysis" class="tab-pane" style="display: none;">
+            <div class="alert-banner banner-info" style="margin-bottom: 1.5rem;">
+                <span class="banner-icon">ℹ️</span>
+                <span class="banner-message">
+                    <strong>Design & Reporting Invariant:</strong> All metrics are estimates based strictly on commanded relay states (T = tOFF - tON).
+                    Zero electrical power (kWh) or financial cost is measured, calculated, or implied.
+                </span>
+            </div>
+
+            <!-- Date Selector & Refresh Header -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Operational Runtime Profiles</h2>
+                    <div class="filter-controls">
+                        <label for="analysis-date-input" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 0.5rem;">Date (Local):</label>
+                        <input type="date" id="analysis-date-input" class="filter-select" style="background-color: var(--color-surface); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.35rem 0.6rem; border-radius: 4px;">
+                        <button id="btn-refresh-analysis" class="btn-refresh">Refresh Profiles</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 24-Hour Hourly Usage Profile (Histogram) -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>24-Hour Hourly Usage Distribution (Asia/Dhaka)</h2>
+                    <span class="footnote-note">Aggregated runtime in minutes per hour bin (00:00 to 23:00)</span>
+                </div>
+                <div class="card" style="padding: 1.25rem;">
+                    <div style="height: 320px; width: 100%; position: relative;">
+                        <canvas id="hourly-usage-chart"></canvas>
+                    </div>
+                    <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-muted);">
+                        <span>Stacked representation of active appliance operating durations per 1-hour window.</span>
+                        <span id="analysis-chart-total">Total active runtime: Calculating...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Adaptive Baseline Anomaly Monitor (Median + MAD) -->
+            <section class="section-block">
+                <div class="section-header">
+                    <h2>Data-Driven Adaptive Baseline Monitor</h2>
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                        <span id="baseline-feature-badge" class="badge badge-warning">Feature Flag: Disabled (Default)</span>
+                        <button id="btn-toggle-baseline" class="btn-refresh" style="background-color: var(--color-accent); color: #000;">
+                            Toggle Feature Flag
+                        </button>
+                    </div>
+                </div>
+                <div class="card" style="margin-bottom: 1rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0;">
+                        <strong>Statistical Outlier Protocol:</strong> Calculated using Median Absolute Deviation (Threshold = Median + 3 &times; 1.4826 &times; MAD).
+                        Safeguarded by design: requires a minimum of 20 completed sessions per device before activating to prevent small-sample volatility.
+                    </p>
+                </div>
+                <div class="card-grid" id="baseline-cards-grid">
+                    <!-- Cards populated dynamically by analysis.js -->
+                </div>
+            </section>
+        </div>
     </main>
 
     <footer class="app-footer">
@@ -504,9 +566,11 @@
         <p class="disclaimer-text">PIR absence does not prove room vacancy. All operational figures are estimates based on commanded state.</p>
     </footer>
 
+    <script src="/js/chart.min.js"></script>
     <script src="/js/live.js"></script>
     <script src="/js/events.js"></script>
     <script src="/js/anomalies.js"></script>
     <script src="/js/control.js"></script>
+    <script src="/js/analysis.js"></script>
 </body>
 </html>

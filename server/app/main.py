@@ -15,7 +15,13 @@ from app.config import settings
 from app.db import get_db_connection, run_migrations
 from app.auth import authenticate_user, create_access_token, get_current_user, seed_default_users
 from app.mqtt_client import start_mqtt_client, stop_mqtt_client, get_system_status
-from app.analysis import get_daily_runtime_breakdown
+from app.analysis import (
+    get_daily_runtime_breakdown,
+    get_hourly_runtime_distribution,
+    get_adaptive_baseline,
+    get_all_adaptive_baselines,
+    set_adaptive_baseline_flag
+)
 from app.detectors import run_all_detectors, get_config_value, set_config_value
 from app.policy import issue_device_command, issue_mode_command
 
@@ -78,6 +84,9 @@ class OverrideRequest(BaseModel):
     device_id: str
     hold_seconds: Optional[int] = 600
     reason: Optional[str] = "manual_hold"
+
+class BaselineFlagRequest(BaseModel):
+    enabled: bool
 
 @app.get("/api/health")
 def health_check() -> Dict[str, Any]:
@@ -277,6 +286,40 @@ def get_runtime_sessions(
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+@app.get("/api/analysis/hourly")
+def get_hourly_analysis(date: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Returns 24 one-hour bins of runtime in minutes for each device.
+    Local timezone is Asia/Dhaka (UTC+6).
+    """
+    return get_hourly_runtime_distribution(date_local=date, tz_offset_hours=6)
+
+@app.get("/api/analysis/baseline")
+def get_baseline_analysis(device_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Returns data-driven adaptive runtime baselines (Median + MAD).
+    Protected behind a feature flag (DEFAULT: OFF); requires >= 20 completed sessions.
+    """
+    if device_id:
+        return get_adaptive_baseline(device_id)
+    return get_all_adaptive_baselines()
+
+@app.post("/api/settings/baseline-flag")
+def toggle_baseline_flag(
+    req: BaselineFlagRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Toggles the adaptive baseline feature flag in config table with audit trail.
+    """
+    actor = user.get("username", "admin_operator")
+    success = set_adaptive_baseline_flag(req.enabled, actor=actor)
+    return {
+        "success": success,
+        "adaptive_baseline_enabled": req.enabled,
+        "message": f"Adaptive baseline feature flag set to {req.enabled}."
+    }
 
 @app.get("/api/anomalies")
 def get_anomalies(

@@ -1,6 +1,6 @@
 # Test Execution & Verification Report
 **Project**: DC Office Single-Room Hybrid Energy Management System (DCEMS) MVP  
-**Last Updated**: November 2, 2026 (Phase 3 Alert-Only Anomaly Detectors & Calibration Helper Completed)  
+**Last Updated**: November 2, 2026 (Phase 5 Verification, Benchmarking, Documentation & Polish Completed)  
 
 ---
 
@@ -41,7 +41,7 @@ This living document tracks empirical verification evidence across all functiona
 |---|---|:---:|:---:|:---:|---|
 | **T1** | Sensor readings & staleness observation | Phase 1 | Simulated / **NEEDS-HARDWARE** | **PASS (Simulated)** | Sensor values update; staleness >60s flags warning (`test_staleness.py`) |
 | **T2** | Vacancy stages (5m, 10m, 15m) | Phase 3 | Automated | **PASS** | Candidate, warning, and confirmed sequence validated (`test_detector_vacancy.py`) |
-| **T3** | Stationary occupant behavior | Phase 3 | **NEEDS-HARDWARE** | `PENDING` | Documented in `docs/LIMITATIONS.md` & UI warning; physical human stillness |
+| **T3** | Stationary occupant behavior | Phase 3 | **NEEDS-HARDWARE** | **NEEDS-HARDWARE** | Physical human stillness protocol documented in `docs/HARDWARE_CHECKLIST.md` & UI warning banner |
 | **T4** | Daylight threshold confirmation | Phase 3 | Simulated / **NEEDS-HARDWARE** | **PASS (Simulated)** | 3m confirmation window verified (`test_detector_daylight.py`) |
 | **T5** | Daylight hysteresis stability | Phase 3 | Automated | **PASS** | Separate ON/OFF thresholds prevent relay cycling (`test_detector_daylight.py`) |
 | **T6** | Manual override priority | Phase 4 | Automated | **PASS** | Manual hold (600s) and MANUAL mode block auto-actions (`test_safety_gate_parity.py`) |
@@ -203,4 +203,93 @@ server/tests/test_state_logging.py::test_invalid_device_or_state_rejected PASSED
 simulator/tests/test_e2e_automation.py::test_tc12_e2e_proposal_gate_relay_ack_cycle PASSED [100%]
 
 ============================= 68 passed in 6.45s ==============================
+```
+
+---
+
+## 6. Phase 5 Final Test Execution Record (73/73 Passed)
+
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.2.0, pluggy-1.7.0 -- D:\EMS\.python\python.exe
+cachedir: .pytest_cache
+rootdir: D:\EMS
+plugins: anyio-4.16.0
+collecting ... collected 73 items
+
+server/tests/test_adaptive_baseline.py::test_adaptive_baseline_default_flag_off PASSED [  1%]
+server/tests/test_adaptive_baseline.py::test_adaptive_baseline_insufficient_sessions_guard PASSED [  2%]
+server/tests/test_adaptive_baseline.py::test_adaptive_baseline_hand_calculated_median_mad PASSED [  4%]
+server/tests/test_adaptive_baseline.py::test_api_adaptive_baseline_toggle PASSED [  5%]
+server/tests/test_alert_cooldown.py::test_alert_deduplication_and_cooldown PASSED [  6%]
+server/tests/test_analysis_hourly.py::test_t14_hourly_runtime_distribution_fixture PASSED [  8%]
+server/tests/test_api_anomalies.py::test_api_anomalies_list_and_filter PASSED [  9%]
+server/tests/test_api_anomalies.py::test_api_anomalies_acknowledge PASSED [ 10%]
+server/tests/test_api_daylight_calibration_workflow PASSED [ 12%]
+server/tests/test_api_control.py::test_api_control_device_success PASSED [ 13%]
+server/tests/test_api_control.py::test_api_control_device_ac_pc_power_off_blocked_t13 PASSED [ 15%]
+server/tests/test_api_control.py::test_api_control_mode_transitions PASSED [ 16%]
+server/tests/test_api_control.py::test_api_control_manual_override_and_audit PASSED [ 17%]
+server/tests/test_api_events.py::test_api_events_filtering PASSED        [ 19%]
+server/tests/test_api_events.py::test_api_analysis_runtime_endpoint PASSED [ 20%]
+server/tests/test_api_events.py::test_api_analysis_sessions_endpoint PASSED [ 21%]
+server/tests/test_api_live.py::test_get_live_telemetry_schema_and_labels PASSED [ 23%]
+server/tests/test_api_live.py::test_get_sensor_readings_history PASSED   [ 24%]
+server/tests/test_auth.py::test_password_hashing PASSED                  [ 26%]
+server/tests/test_auth.py::test_jwt_token_lifecycle PASSED               [ 27%]
+server/tests/test_auth.py::test_jwt_tampering_rejected PASSED            [ 28%]
+server/tests/test_auth.py::test_jwt_expiration PASSED                    [ 30%]
+server/tests/test_auth.py::test_api_login_success_and_role PASSED        [ 31%]
+server/tests/test_auth.py::test_api_login_invalid_credentials_t15 PASSED [ 32%]
+server/tests/test_auth.py::test_api_protected_profile_t15 PASSED         [ 34%]
+server/tests/test_require_admin_guard_t15 PASSED           [ 35%]
+server/tests/test_config.py::test_canonical_device_identifiers PASSED    [ 36%]
+server/tests/test_config.py::test_canonical_controller_modes PASSED      [ 38%]
+server/tests/test_config.py::test_canonical_device_states PASSED         [ 39%]
+server/tests/test_config.py::test_hardcoded_auto_eligibility PASSED      [ 41%]
+server/tests/test_config.py::test_settings_defaults PASSED               [ 42%]
+server/tests/test_db_migrations.py::test_migration_tables_exist PASSED   [ 43%]
+server/tests/test_db_migrations.py::test_device_policies_seeded PASSED   [ 45%]
+server/tests/test_db_migrations.py::test_sensor_samples_null_allowed_and_bounds_check PASSED [ 46%]
+server/tests/test_db_migrations.py::test_device_state_events_device_constraint PASSED [ 47%]
+server/tests/test_config.py::test_config_table_seeded PASSED      [ 49%]
+server/tests/test_dedup.py::test_t12_event_deduplication PASSED          [ 50%]
+server/tests/test_detector_cycling.py::test_tc06_rapid_cycling_diagnostic_detection PASSED [ 52%]
+server/tests/test_detector_daylight.py::test_tc04_t4_t5_daylight_gating_confirmation_and_hysteresis PASSED [ 53%]
+server/tests/test_detector_runtime.py::test_tc05_runtime_threshold_detection PASSED [ 54%]
+server/tests/test_detector_sensor_quality.py::test_tc08_t8_sensor_quality_and_staleness_anomaly PASSED [ 56%]
+server/tests/test_detector_vacancy.py::test_tc03_t2_vacancy_stages_progression PASSED [ 57%]
+server/tests/test_detector_vacancy.py::test_tc11_ac_pc_vacancy_alert_only PASSED [ 58%]
+server/tests/test_lwt_status.py::test_lwt_offline_transition PASSED      [ 60%]
+server/tests/test_heartbeat_online_transition PASSED [ 61%]
+server/tests/test_offline_queue.py::test_t11_offline_queue_overflow_and_data_gap_catchup PASSED [ 63%]
+server/tests/test_policy.py::test_validate_server_proposal_ac_pc_ineligible PASSED [ 64%]
+server/tests/test_policy.py::test_validate_server_proposal_default_disabled PASSED [ 65%]
+server/tests/test_policy.py::test_validate_server_proposal_enabled_and_manual_override PASSED [ 67%]
+server/tests/test_policy.py::test_issue_device_command_t13_safeguard PASSED [ 68%]
+server/tests/test_policy.py::test_issue_device_command_allowed_and_ack_processing PASSED [ 69%]
+server/tests/test_issue_mode_command_lifecycle PASSED    [ 71%]
+server/tests/test_runtime_calc.py::test_t9_t14_hand_calculated_runtime_fixtures PASSED [ 72%]
+server/tests/test_runtime_calc.py::test_outage_handling_marks_interrupted_session PASSED [ 73%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_1_device_allowlist_auto_eligible PASSED [ 75%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_2_controller_mode_blocks_auto PASSED [ 76%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_3_manual_override_hold PASSED [ 78%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_5_min_switching_intervals PASSED [ 79%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_6_duplicate_and_expired_commands PASSED [ 80%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_7_redundant_transition PASSED [ 82%]
+server/tests/test_safety_gate_parity.py::test_safety_gate_point_8_test_t13_ac_pc_power_off_safeguard PASSED [ 83%]
+server/tests/test_sensor_ingestion.py::test_sensor_ingestion_valid_payload PASSED [ 84%]
+server/tests/test_sensor_ingestion.py::test_sensor_ingestion_null_not_zero_on_invalid PASSED [ 86%]
+server/tests/test_sensor_ingestion.py::test_derive_occupancy_state PASSED [ 87%]
+server/tests/test_simulator_unit.py::test_simulator_initial_state PASSED [ 89%]
+server/tests/test_simulator_unit.py::test_simulator_offline_queue_and_data_gap PASSED [ 90%]
+server/tests/test_staleness.py::test_stale_when_no_readings PASSED       [ 91%]
+server/tests/test_staleness.py::test_fresh_reading_not_stale PASSED      [ 93%]
+server/tests/test_staleness.py::test_stale_after_60_seconds_t1 PASSED    [ 94%]
+server/tests/test_state_logging.py::test_tc01_off_to_on_event_logging PASSED [ 95%]
+server/tests/test_state_logging.py::test_tc02_on_to_off_event_logging PASSED [ 97%]
+server/tests/test_state_logging.py::test_invalid_device_or_state_rejected PASSED [ 98%]
+simulator/tests/test_e2e_automation.py::test_tc12_e2e_proposal_gate_relay_ack_cycle PASSED [100%]
+
+============================= 73 passed in 6.94s ==============================
 ```

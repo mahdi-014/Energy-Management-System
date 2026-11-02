@@ -30,7 +30,7 @@
     };
 
     function activateTab(target) {
-        const tabs = ["live", "events", "anomalies", "control", "settings"];
+        const tabs = ["live", "events", "anomalies", "control", "settings", "analysis"];
         tabs.forEach(t => {
             const nav = document.getElementById("nav-" + t);
             const pane = document.getElementById("tab-" + t);

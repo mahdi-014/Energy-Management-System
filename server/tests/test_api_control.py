@@ -79,3 +79,4 @@ def test_api_control_manual_override_and_audit():
     assert len(actions) >= 1
     assert actions[0]["device_id"] == "fan_01"
     assert actions[0]["proposed_state"] == "ON"
+

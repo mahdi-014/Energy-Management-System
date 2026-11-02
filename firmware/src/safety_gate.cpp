@@ -199,3 +199,4 @@ SafetyGateResult validateManualCommand(
 
     return (SafetyGateResult){true, "allowed"};
 }
+

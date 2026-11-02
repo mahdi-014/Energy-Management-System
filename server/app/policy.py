@@ -337,3 +337,4 @@ def issue_mode_command(
     finally:
         if should_close:
             conn.close()
+

@@ -306,3 +306,260 @@ def get_daily_runtime_breakdown(
         if should_close_conn:
             conn.close()
 
+def _calculate_median(values: List[float]) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    if n % 2 == 1:
+        return float(s[mid])
+    return float((s[mid - 1] + s[mid]) / 2.0)
+
+def get_hourly_runtime_distribution(
+    date_local: Optional[str] = None,
+    tz_offset_hours: int = 6,
+    custom_conn: Optional[sqlite3.Connection] = None
+) -> Dict[str, Any]:
+    """
+    Computes 24 one-hour bins (0..23) of estimated runtime in minutes for each device.
+    Local timezone defaults to Asia/Dhaka (UTC+6).
+    """
+    now_utc = int(time.time())
+    now_local_ts = now_utc + (tz_offset_hours * 3600)
+
+    if date_local is None:
+        target_date_str = datetime.fromtimestamp(now_local_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+    else:
+        target_date_str = date_local
+
+    try:
+        # Midnight local parsed as naive UTC
+        local_midnight_naive = datetime.strptime(target_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        local_midnight_utc = int(local_midnight_naive.timestamp()) - (tz_offset_hours * 3600)
+    except ValueError:
+        target_date_str = datetime.fromtimestamp(now_local_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        local_midnight_naive = datetime.strptime(target_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        local_midnight_utc = int(local_midnight_naive.timestamp()) - (tz_offset_hours * 3600)
+
+    day_end_utc = local_midnight_utc + 86400
+
+    conn = custom_conn or get_db_connection()
+    should_close_conn = (custom_conn is None)
+
+    hours_labels = [f"{h:02d}:00" for h in range(24)]
+    device_hourly: Dict[str, List[float]] = {dev: [0.0] * 24 for dev in CANONICAL_DEVICES}
+    device_totals: Dict[str, float] = {dev: 0.0 for dev in CANONICAL_DEVICES}
+
+    try:
+        cur = conn.cursor()
+
+        for dev in CANONICAL_DEVICES:
+            cur.execute("""
+                SELECT session_id, start_time_utc, end_time_utc
+                FROM runtime_sessions
+                WHERE device_id = ?
+                  AND start_time_utc < ?
+                  AND (end_time_utc IS NULL OR end_time_utc > ?)
+                ORDER BY start_time_utc ASC
+            """, (dev, day_end_utc, local_midnight_utc))
+            sessions = cur.fetchall()
+
+            for h in range(24):
+                bin_start = local_midnight_utc + (h * 3600)
+                bin_end = bin_start + 3600
+
+                overlap_sec_bin = 0
+                for sess in sessions:
+                    s_start = sess["start_time_utc"]
+                    s_end = sess["end_time_utc"] if sess["end_time_utc"] is not None else now_utc
+
+                    overlap_start = max(s_start, bin_start)
+                    overlap_end = min(s_end, bin_end)
+
+                    if overlap_end > overlap_start:
+                        overlap_sec_bin += (overlap_end - overlap_start)
+
+                minutes = round(min(60.0, overlap_sec_bin / 60.0), 1)
+                device_hourly[dev][h] = minutes
+                device_totals[dev] += minutes
+
+            device_totals[dev] = round(device_totals[dev], 1)
+
+        return {
+            "date_local": target_date_str,
+            "timezone": f"Asia/Dhaka (UTC+{tz_offset_hours})",
+            "hours": hours_labels,
+            "devices": device_hourly,
+            "total_runtime_minutes": device_totals,
+            "labels": {
+                "runtime_disclaimer": "All runtime metrics are estimates based on commanded relay state.",
+                "measurement_basis": "estimate_based_on_commanded_state",
+                "energy_notice": "Zero power (kWh) or monetary cost is measured or implied.",
+                "unit": "minutes"
+            }
+        }
+    finally:
+        if should_close_conn:
+            conn.close()
+
+def get_adaptive_baseline(
+    device_id: str,
+    custom_conn: Optional[sqlite3.Connection] = None
+) -> Dict[str, Any]:
+    """
+    Computes data-driven adaptive runtime baseline using Median and MAD
+    (Median Absolute Deviation) according to specification:
+    - Only activates if >= 20 comparable completed sessions exist.
+    - Protected behind feature flag (DEFAULT: OFF).
+    """
+    if device_id not in CANONICAL_DEVICES:
+        return {"status": "invalid_device", "device_id": device_id}
+
+    conn = custom_conn or get_db_connection()
+    should_close_conn = (custom_conn is None)
+
+    try:
+        cur = conn.cursor()
+
+        # Check feature flag in config table
+        cur.execute("SELECT value FROM config WHERE key = 'adaptive_baseline_enabled'")
+        row = cur.fetchone()
+        flag_enabled = (row["value"].strip().lower() == "true") if row else False
+
+        if not flag_enabled:
+            return {
+                "device_id": device_id,
+                "feature_flag_enabled": False,
+                "status": "disabled",
+                "message": "Adaptive baseline feature flag is disabled by default."
+            }
+
+        # Query completed sessions (end_known = 1)
+        cur.execute("""
+            SELECT estimated_duration_sec
+            FROM runtime_sessions
+            WHERE device_id = ? AND end_known = 1 AND estimated_duration_sec > 0
+            ORDER BY start_time_utc DESC
+            LIMIT 100
+        """, (device_id,))
+        rows = cur.fetchall()
+        count = len(rows)
+
+        if count < 20:
+            return {
+                "device_id": device_id,
+                "feature_flag_enabled": True,
+                "status": "insufficient_data",
+                "completed_sessions_count": count,
+                "required_sessions_count": 20,
+                "message": f"Requires >= 20 completed sessions for baseline stability. Currently {count}/20."
+            }
+
+        durations = [float(r["estimated_duration_sec"]) for r in rows]
+        median_dur = _calculate_median(durations)
+        abs_deviations = [abs(d - median_dur) for d in durations]
+        mad = _calculate_median(abs_deviations)
+
+        # Upper threshold: Median + 3 * (1.4826 * MAD)
+        normal_scale_mad = 1.4826 * mad
+        upper_threshold_sec = round(median_dur + (3.0 * normal_scale_mad), 1)
+
+        return {
+            "device_id": device_id,
+            "feature_flag_enabled": True,
+            "status": "active",
+            "completed_sessions_count": count,
+            "median_sec": round(median_dur, 1),
+            "median_min": round(median_dur / 60.0, 1),
+            "mad_sec": round(mad, 1),
+            "upper_threshold_sec": upper_threshold_sec,
+            "upper_threshold_min": round(upper_threshold_sec / 60.0, 1),
+            "message": "Adaptive baseline active and calculated via Median + MAD."
+        }
+    finally:
+        if should_close_conn:
+            conn.close()
+
+def get_all_adaptive_baselines(
+    custom_conn: Optional[sqlite3.Connection] = None
+) -> Dict[str, Any]:
+    """
+    Aggregates adaptive baseline calculations across all canonical devices.
+    """
+    conn = custom_conn or get_db_connection()
+    should_close_conn = (custom_conn is None)
+    try:
+        cur = conn.cursor()
+        # Check feature flag in config table
+        cur.execute("SELECT value FROM config WHERE key = 'adaptive_baseline_enabled'")
+        row = cur.fetchone()
+        flag_enabled = (row["value"].strip().lower() == "true") if row else False
+
+        baselines = {}
+        for dev in CANONICAL_DEVICES:
+            baselines[dev] = get_adaptive_baseline(dev, custom_conn=conn)
+
+        return {
+            "feature_flag_enabled": flag_enabled,
+            "devices": baselines
+        }
+    finally:
+        if should_close_conn:
+            conn.close()
+
+def set_adaptive_baseline_flag(
+    enabled: bool,
+    actor: str = "operator",
+    custom_conn: Optional[sqlite3.Connection] = None
+) -> bool:
+    """
+    Toggles the adaptive baseline feature flag in the config table with audit logging.
+    """
+    conn = custom_conn or get_db_connection()
+    should_close_conn = (custom_conn is None)
+    val_str = "true" if enabled else "false"
+    now = int(time.time())
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT value, history FROM config WHERE key = 'adaptive_baseline_enabled'")
+        row = cur.fetchone()
+        history = []
+        if row:
+            if row["history"]:
+                try:
+                    history = json.loads(row["history"])
+                except Exception:
+                    history = []
+            history.append({
+                "value": row["value"],
+                "changed_at": now,
+                "changed_by": actor
+            })
+            cur.execute("""
+                UPDATE config
+                SET value = ?, changed_at = ?, changed_by = ?, history = ?
+                WHERE key = 'adaptive_baseline_enabled'
+            """, (val_str, now, actor, json.dumps(history)))
+        else:
+            cur.execute("""
+                INSERT INTO config (key, value, changed_at, changed_by, history)
+                VALUES ('adaptive_baseline_enabled', ?, ?, ?, '[]')
+            """, (val_str, now, actor))
+
+        cur.execute("""
+            INSERT INTO audit_log (log_id, timestamp_utc, event_type, actor, details)
+            VALUES (?, ?, 'settings_change', ?, ?)
+        """, (f"log_baseline_{now}_{uuid.uuid4().hex[:6]}", now, actor, json.dumps({
+            "key": "adaptive_baseline_enabled",
+            "new_value": val_str
+        })))
+
+        conn.commit()
+        return True
+    finally:
+        if should_close_conn:
+            conn.close()
+
+

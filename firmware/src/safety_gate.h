@@ -53,3 +53,4 @@ void recordActionId(const char* actionId);
 #endif
 
 #endif // SAFETY_GATE_H
+

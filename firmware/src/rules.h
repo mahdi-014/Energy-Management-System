@@ -17,3 +17,4 @@ void evaluateLocalRules(const SensorSnapshot* snapshot, uint32_t currentEpoch);
 #endif
 
 #endif // RULES_H
+
